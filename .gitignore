@@ -2,7 +2,7 @@
 *.o
 /bin
 /ppd
-/src/rastertotpcl
-/src/ppd
+/src_old/rastertotpcl
+/src_old/ppd
 *.raster
 *.tpcl

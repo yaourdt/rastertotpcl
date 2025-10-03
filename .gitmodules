@@ -1,0 +1,3 @@
+[submodule "external/pappl"]
+	path = external/pappl
+	url = https://github.com/michaelrsweet/pappl.git

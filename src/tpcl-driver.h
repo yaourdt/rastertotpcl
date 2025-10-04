@@ -19,6 +19,7 @@
  */
 
 extern const pappl_pr_driver_t tpcl_drivers[];
+extern const int tpcl_drivers_count;
 
 
 /*

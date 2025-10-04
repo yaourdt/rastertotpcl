@@ -49,12 +49,14 @@ typedef struct {
 
 const pappl_pr_driver_t tpcl_drivers[] = {
   {
-    "toshiba-tec-tpcl",                           // name
+    "toshiba-tec-tpcl",                          // name
     "Toshiba TEC TPCL v2 Label Printer",         // description
     "MFG:Toshiba Tec;MDL:TPCL;CMD:TPCL;",        // device_id
-    NULL                                          // extension
+    NULL                                         // extension
   }
 };
+
+const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
 
 
 /*

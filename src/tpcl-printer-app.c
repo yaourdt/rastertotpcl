@@ -83,16 +83,16 @@ main(int  argc,
   return papplMainloop(
       argc,
       argv,
-      "1.0",
-      NULL,                    // HTML footer
-      1,                       // Number of drivers
+      "0.2.0",                            // Version
+      NULL,                               // HTML footer
+      1,                                  // Number of drivers
       (pappl_pr_driver_t *)tpcl_drivers,  // Driver information array
-      NULL,                    // Auto-add callback
-      tpcl_driver_cb,          // Driver callback
-      NULL,                    // Subcommand name
-      NULL,                    // Subcommand callback
-      system_cb,               // System callback
-      NULL,                    // Usage callback
-      NULL                     // Callback data
+      NULL,                               // Auto-add callback
+      tpcl_driver_cb,                     // Driver callback
+      NULL,                               // Subcommand name
+      NULL,                               // Subcommand callback
+      system_cb,                          // System callback
+      NULL,                               // Usage callback
+      NULL                                // Callback data
   );
 }

@@ -17,58 +17,10 @@
 
 
 /*
- * System callback - creates and configures the printer application system
+ * Footer HTML for web interface
  */
-
-static pappl_system_t *
-system_cb(
-    int           num_options,
-    cups_option_t *options,
-    void          *data)
-{
-  pappl_system_t *system;
-  const char     *hostname = NULL;
-  int            port = 0;
-
-  // Get hostname and port from options if specified
-  hostname = cupsGetOption("hostname", num_options, options);
-  if (cupsGetOption("port", num_options, options))
-    port = atoi(cupsGetOption("port", num_options, options));
-
-  // Create the system object
-  // papplSystemCreate(options, name, port, subtypes, spooldir, logfile, loglevel, auth_service, tls_only)
-  system = papplSystemCreate(
-      PAPPL_SOPTIONS_MULTI_QUEUE |
-      PAPPL_SOPTIONS_WEB_INTERFACE |
-      PAPPL_SOPTIONS_WEB_LOG |
-      PAPPL_SOPTIONS_WEB_NETWORK |
-      PAPPL_SOPTIONS_WEB_SECURITY |
-      PAPPL_SOPTIONS_WEB_TLS,
-      "Toshiba TEC TPCL Printer Application",
-      port,
-      "_print,_universal",
-      cupsGetOption("spool-directory", num_options, options),
-      cupsGetOption("log-file", num_options, options),
-      PAPPL_LOGLEVEL_INFO,  // log level
-      cupsGetOption("auth-service", num_options, options),
-      false  // tls_only
-  );
-
-  // Set footer HTML for web interface
-  papplSystemSetFooterHTML(system,
-      "Copyright &copy; 2020-2025 by Mark Dornbach. "
-      "Licensed under GNU GPL v3.");
-
-  // Set save callback for persistent state
-  papplSystemSetSaveCallback(system,
-      (pappl_save_cb_t)papplSystemSaveState,
-      (void *)cupsGetOption("state-file", num_options, options));
-
-  // Add network listeners
-  papplSystemAddListeners(system, NULL);
-
-  return system;
-}
+const char* footer = "Copyright &copy; 2001-2025 by Mark Dornbach and other authors. "
+  "Licensed under GNU GPL v3.";
 
 
 /*
@@ -81,18 +33,18 @@ main(int  argc,
 {
   // papplMainloop(argc, argv, version, footer_html, num_drivers, drivers, autoadd_cb, driver_cb, subcmd_name, subcmd_cb, system_cb, usage_cb, data)
   return papplMainloop(
-      argc,
-      argv,
-      "0.2.0",                            // Version
-      NULL,                               // HTML footer
-      1,                                  // Number of drivers
+      argc,                               // Number of command line arguments
+      argv,                               // Command line arguments
+      "0.2.0",                            // Version number
+      footer,                             // Footer HTML or NULL for none
+      tpcl_drivers_count,                 // Number of drivers
       (pappl_pr_driver_t *)tpcl_drivers,  // Driver information array
-      NULL,                               // Auto-add callback
-      tpcl_driver_cb,                     // Driver callback
-      NULL,                               // Subcommand name
-      NULL,                               // Subcommand callback
-      system_cb,                          // System callback
-      NULL,                               // Usage callback
-      NULL                                // Callback data
+      NULL,                               // Auto-add callback or NULL for none
+      tpcl_driver_cb,                     // Driver callback to configure a printer
+      NULL,                               // Subcommand name or NULL for none
+      NULL,                               // Subcommand callback or NULL for none
+      NULL,                               // System callback or NULL for default
+      NULL,                               // Usage callbackor NULL for default
+      NULL                                // Application specific callback data
   );
 }

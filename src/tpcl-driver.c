@@ -213,12 +213,25 @@ driver_data->media_default = driver_data->media_ready[0];
   return true;
 }
 
+    // Use raster callbacks - TODO is this correct? "Print (raw) file callback"
+static bool
+tpcl_print(
+    pappl_job_t *job, 
+    pappl_pr_options_t *options, 
+    pappl_device_t *device)
+{
+  // TODO: Print
+  // For now, just return true (print is OK)
+  printf("Hello stdout! Position is %d\n", 5);
+
+  return true;
+}
 
 /*
  * 'tpcl_rstartjob()' - Start a print job
  */
 
-bool
+static bool
 tpcl_rstartjob(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
@@ -249,7 +262,7 @@ tpcl_rstartjob(
  * 'tpcl_rstartpage()' - Start a page
  */
 
-bool
+static bool
 tpcl_rstartpage(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
@@ -333,7 +346,7 @@ tpcl_rstartpage(
  * 'tpcl_rwriteline()' - Write a line of raster data
  */
 
-bool
+static bool
 tpcl_rwriteline(
     pappl_job_t         *job,
     pappl_pr_options_t  *options,
@@ -376,7 +389,7 @@ tpcl_rwriteline(
  * 'tpcl_rendpage()' - End a page
  */
 
-bool
+static bool
 tpcl_rendpage(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
@@ -464,7 +477,7 @@ tpcl_rendjob(
  * 'tpcl_status()' - Get printer status
  */
 
-bool
+static bool
 tpcl_status(
     pappl_printer_t *printer)
 {

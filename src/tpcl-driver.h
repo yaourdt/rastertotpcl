@@ -37,44 +37,44 @@ bool tpcl_driver_cb(
 
 
 /*
- * Raster printing callbacks
+ * Raster printing and status callbacks
  */
 
-bool tpcl_rstartjob(
+static bool	tpcl_print(
+    pappl_job_t *job, 
+    pappl_pr_options_t *options, 
+    pappl_device_t *device);
+
+static bool tpcl_rendjob(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device);
 
-bool tpcl_rstartpage(
+static bool tpcl_rendpage(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device,
     unsigned           page);
 
-bool tpcl_rwriteline(
+static bool tpcl_rstartjob(
+    pappl_job_t        *job,
+    pappl_pr_options_t *options,
+    pappl_device_t     *device);
+
+static bool tpcl_rstartpage(
+    pappl_job_t        *job,
+    pappl_pr_options_t *options,
+    pappl_device_t     *device,
+    unsigned           page);
+
+static bool tpcl_rwriteline(
     pappl_job_t         *job,
     pappl_pr_options_t  *options,
     pappl_device_t      *device,
     unsigned            y,
     const unsigned char *line);
 
-bool tpcl_rendpage(
-    pappl_job_t        *job,
-    pappl_pr_options_t *options,
-    pappl_device_t     *device,
-    unsigned           page);
-
-bool tpcl_rendjob(
-    pappl_job_t        *job,
-    pappl_pr_options_t *options,
-    pappl_device_t     *device);
-
-
-/*
- * Status callback
- */
-
-bool tpcl_status(
+static bool tpcl_status(
     pappl_printer_t *printer);
 
 

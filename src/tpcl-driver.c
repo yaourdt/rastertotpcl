@@ -139,7 +139,7 @@ tpcl_driver_cb(
   driver_data->has_supplies  = true;
 
   // Basic driver information
-  driver_data->format = "application/vnd.cups-raster"; // native format (TODO check if correct)
+  driver_data->format = "application/vnd.toshiba-tpcl";
 
 
 

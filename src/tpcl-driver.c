@@ -132,18 +132,39 @@ printf("Hello stdout! Position is %d\n", 1);
   driver_data->raster_types = PAPPL_PWG_RASTER_TYPE_BLACK_1 |
                               PAPPL_PWG_RASTER_TYPE_BLACK_8;
 
-  // Use roll media for label printers - allows any size within range
-  // Range: 6x6mm (min) to 203x330mm (max)
-  driver_data->num_media = 2;
-  driver_data->media[0] = "roll_min_6x6mm";
-  driver_data->media[1] = "roll_max_203x330mm";
+  // Common label sizes - using standard PWG media names
+  // We define a selection of common sizes instead of roll_min/roll_max
+// Use roll media for label printers - allows any size within range
+// Range: 6x6mm (min) to 203x330mm (max)
+//driver_data->num_media = 2;
+//driver_data->media[0] = "roll_min_6x6mm";
+//driver_data->media[1] = "roll_max_203x330mm";
+  // due to validation in PAPPL 1.4.9
+  int media_idx = 0;
+  driver_data->media[media_idx++] = "oe_address-label_1.125x3.5in";  // Address label
+  driver_data->media[media_idx++] = "oe_1.25x0.25in_31.75x6.35mm";    // Small
+  driver_data->media[media_idx++] = "oe_1.25x2.25in_31.75x57.15mm";   // Narrow
+  driver_data->media[media_idx++] = "oe_2x1in_50.8x25.4mm";           // 2x1
+  driver_data->media[media_idx++] = "oe_2x4in_50.8x101.6mm";          // 2x4
+  driver_data->media[media_idx++] = "oe_3x5in_76.2x127mm";            // 3x5
+  driver_data->media[media_idx++] = "oe_4x5in_101.6x127mm";           // 4x5
+  driver_data->media[media_idx++] = "oe_4x6in_101.6x152.4mm";         // 4x6 shipping
+  driver_data->media[media_idx++] = "oe_6x4in_152.4x101.6mm";         // 6x4
+  driver_data->media[media_idx++] = "oe_100x150mm_3.937x5.906in";     // 100x150mm
+  driver_data->media[media_idx++] = "oe_103x199mm_4.055x7.835in";     // DHL label
+  driver_data->num_media = media_idx;
 
   // Default media size (4" x 5" / 101.6x127mm is common for labels)
   // media_default is a pappl_media_col_t structure
-  strncpy(driver_data->media_default.size_name, "roll_101.6x127mm",
+  memset(&driver_data->media_default, 0, sizeof(driver_data->media_default));
+  strncpy(driver_data->media_default.size_name, "oe_4x5in_101.6x127mm",
           sizeof(driver_data->media_default.size_name) - 1);
-  driver_data->media_default.size_width = 288 * 2540 / 72;  // Convert points to hundredths of mm
-  driver_data->media_default.size_length = 360 * 2540 / 72;
+  driver_data->media_default.size_width = 10160;   // 101.6mm in hundredths of mm
+  driver_data->media_default.size_length = 12700;  // 127mm in hundredths of mm
+  strncpy(driver_data->media_default.source, "main-roll",
+          sizeof(driver_data->media_default.source) - 1);
+  strncpy(driver_data->media_default.type, "labels",
+          sizeof(driver_data->media_default.type) - 1);
 
   // Media sources (single roll/tray)
   driver_data->num_source = 1;
@@ -182,32 +203,11 @@ printf("Hello stdout! Position is %d\n", 1);
   driver_data->identify_supported = PAPPL_IDENTIFY_ACTIONS_SOUND;
   driver_data->identify_default = PAPPL_IDENTIFY_ACTIONS_SOUND;
 
-/*
-for (i = 0; i < driver_data->num_source; i ++)
-{
-  pwg_media_t *pwg;                   // Media size information 
+  // Initialize media_ready for the main roll
+  // For label printers with roll media, use the default size
+  memcpy(&driver_data->media_ready[0], &driver_data->media_default,
+         sizeof(pappl_media_col_t));
 
-  // Use US Letter for regular trays, #10 envelope for the envelope tray 
-  if (!strcmp(driver_data->source[i], "envelope"))
-    strncpy(driver_data->media_ready[i].size_name, "env_10_4.125x9.5in", sizeof(driver_data->media_ready[i].size_name) - 1);
-  else
-    strncpy(driver_data->media_ready[i].size_name, "na_letter_8.5x11in", sizeof(driver_data->media_ready[i].size_name) - 1);
-
-  if ((pwg = pwgMediaForPWG(driver_data->media_ready[i].size_name)) != NULL)
-  {
-    driver_data->media_ready[i].bottom_margin = driver_data->bottom_top;
-    driver_data->media_ready[i].left_margin   = driver_data->left_right;
-    driver_data->media_ready[i].right_margin  = driver_data->left_right;
-    driver_data->media_ready[i].size_width    = pwg->width;
-    driver_data->media_ready[i].size_length   = pwg->length;
-    driver_data->media_ready[i].top_margin    = driver_data->bottom_top;
-    strncpy(driver_data->media_ready[i].source, driver_data->source[i], sizeof(driver_data->media_ready[i].source) - 1);
-    strncpy(driver_data->media_ready[i].type, driver_data->type[0],  sizeof(driver_data->media_ready[i].type) - 1);
-  }
-}
-
-driver_data->media_default = driver_data->media_ready[0];
-*/
   printf("Hello stdout! Position is %d\n", 3);
 
   return true;

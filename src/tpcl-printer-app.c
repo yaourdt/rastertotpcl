@@ -64,6 +64,9 @@ system_cb(
       (pappl_save_cb_t)papplSystemSaveState,
       (void *)cupsGetOption("state-file", num_options, options));
 
+  // Add network listeners
+  papplSystemAddListeners(system, NULL);
+
   return system;
 }
 

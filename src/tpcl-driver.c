@@ -75,20 +75,44 @@ static void tpcl_topix_output_buffer(pappl_device_t *device, tpcl_job_t *tpcl_jo
 
 bool
 tpcl_driver_cb(
-    pappl_system_t         *system,
-    const char             *driver_name,
-    const char             *device_uri,
-    const char             *device_id,
-    pappl_pr_driver_data_t *driver_data,
-    ipp_t                  **driver_attrs,
-    void                   *data)
+    pappl_system_t         *system,          // System config
+    const char             *driver_name,     // Driver name
+    const char             *device_uri,      // Device URI
+    const char             *device_id,       // IEEE-1284 device ID
+    pappl_pr_driver_data_t *driver_data,     // Driver data
+    ipp_t                  **driver_attrs,   // Driver attributes
+    void                   *data)            // Context (not used)
 {
-  int i;
 
+  (void)data;
+
+  // Set callbacks
+  driver_data->printfile_cb  = tpcl_print;
+  driver_data->rendjob_cb    = tpcl_rendjob;
+  driver_data->rendpage_cb   = tpcl_rendpage;
+  driver_data->rstartjob_cb  = tpcl_rstartjob;
+  driver_data->rstartpage_cb = tpcl_rstartpage;
+  driver_data->rwriteline_cb = tpcl_rwriteline;
+  driver_data->status_cb     = tpcl_status;
+  driver_data->has_supplies  = true;
+
+  // Basic driver information
+  driver_data->format = "application/vnd.cups-raster"; // native format (TODO check if correct)
+
+
+
+printf("Hello stdout! Position is %d\n", 1);
   // Set basic driver information
   strncpy(driver_data->make_and_model, "Toshiba TEC TPCL v2 Label Printer",
           sizeof(driver_data->make_and_model) - 1);
   driver_data->make_and_model[sizeof(driver_data->make_and_model) - 1] = '\0';
+
+  // Pages per minute (labels per minute for label printers)
+  driver_data->ppm = 30;  // Typical for thermal label printers
+  driver_data->ppm_color = 0;  // Monochrome only
+
+  // Printer kind
+  driver_data->kind = PAPPL_KIND_LABEL;
 
   // Supported resolutions (203dpi = 8 dots/mm, 300dpi = 12 dots/mm, 600dpi = 24 dots/mm)
   driver_data->num_resolution = 3;
@@ -108,18 +132,15 @@ tpcl_driver_cb(
   driver_data->raster_types = PAPPL_PWG_RASTER_TYPE_BLACK_1 |
                               PAPPL_PWG_RASTER_TYPE_BLACK_8;
 
-  // Add media sizes from tpcl_media_sizes array
-  driver_data->num_media = 0;
-  for (i = 0; tpcl_media_sizes[i].pwg_name != NULL &&
-              driver_data->num_media < PAPPL_MAX_MEDIA; i++)
-  {
-    driver_data->media[driver_data->num_media] = tpcl_media_sizes[i].pwg_name;
-    driver_data->num_media++;
-  }
+  // Use roll media for label printers - allows any size within range
+  // Range: 6x6mm (min) to 203x330mm (max)
+  driver_data->num_media = 2;
+  driver_data->media[0] = "roll_min_6x6mm";
+  driver_data->media[1] = "roll_max_203x330mm";
 
-  // Default media size (4" x 5" is common for labels)
+  // Default media size (4" x 5" / 101.6x127mm is common for labels)
   // media_default is a pappl_media_col_t structure
-  strncpy(driver_data->media_default.size_name, "w288h360",
+  strncpy(driver_data->media_default.size_name, "roll_101.6x127mm",
           sizeof(driver_data->media_default.size_name) - 1);
   driver_data->media_default.size_width = 288 * 2540 / 72;  // Convert points to hundredths of mm
   driver_data->media_default.size_length = 360 * 2540 / 72;
@@ -145,18 +166,49 @@ tpcl_driver_cb(
 
   // Duplex not supported
   driver_data->duplex = PAPPL_DUPLEX_NONE;
+  driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED;
+  driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;
 
   // Finishings (cutter support)
   driver_data->finishings = PAPPL_FINISHINGS_TRIM;
 
-  // Set raster callbacks
-  driver_data->printfile_cb = NULL;           // Use raster callbacks
-  driver_data->rendjob_cb = tpcl_rendjob;
-  driver_data->rendpage_cb = tpcl_rendpage;
-  driver_data->rstartjob_cb = tpcl_rstartjob;
-  driver_data->rstartpage_cb = tpcl_rstartpage;
-  driver_data->rwriteline_cb = tpcl_rwriteline;
-  driver_data->status_cb = tpcl_status;
+  // Additional defaults
+  driver_data->orient_default = IPP_ORIENT_NONE;
+  driver_data->quality_default = IPP_QUALITY_NORMAL;
+  driver_data->content_default = PAPPL_CONTENT_AUTO;
+  driver_data->scaling_default = PAPPL_SCALING_AUTO;
+
+  // Identify actions
+  driver_data->identify_supported = PAPPL_IDENTIFY_ACTIONS_SOUND;
+  driver_data->identify_default = PAPPL_IDENTIFY_ACTIONS_SOUND;
+
+/*
+for (i = 0; i < driver_data->num_source; i ++)
+{
+  pwg_media_t *pwg;                   // Media size information 
+
+  // Use US Letter for regular trays, #10 envelope for the envelope tray 
+  if (!strcmp(driver_data->source[i], "envelope"))
+    strncpy(driver_data->media_ready[i].size_name, "env_10_4.125x9.5in", sizeof(driver_data->media_ready[i].size_name) - 1);
+  else
+    strncpy(driver_data->media_ready[i].size_name, "na_letter_8.5x11in", sizeof(driver_data->media_ready[i].size_name) - 1);
+
+  if ((pwg = pwgMediaForPWG(driver_data->media_ready[i].size_name)) != NULL)
+  {
+    driver_data->media_ready[i].bottom_margin = driver_data->bottom_top;
+    driver_data->media_ready[i].left_margin   = driver_data->left_right;
+    driver_data->media_ready[i].right_margin  = driver_data->left_right;
+    driver_data->media_ready[i].size_width    = pwg->width;
+    driver_data->media_ready[i].size_length   = pwg->length;
+    driver_data->media_ready[i].top_margin    = driver_data->bottom_top;
+    strncpy(driver_data->media_ready[i].source, driver_data->source[i], sizeof(driver_data->media_ready[i].source) - 1);
+    strncpy(driver_data->media_ready[i].type, driver_data->type[0],  sizeof(driver_data->media_ready[i].type) - 1);
+  }
+}
+
+driver_data->media_default = driver_data->media_ready[0];
+*/
+  printf("Hello stdout! Position is %d\n", 3);
 
   return true;
 }

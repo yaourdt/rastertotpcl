@@ -300,33 +300,6 @@ tpcl_driver_cb(
 
 
 /*
- * 'tpcl_send_command()' - Send a TPCL command to the printer
- *
- * Sends a command in TPCL format: [ESC] command [LF] [NUL]
- * Returns true on success, false on failure.
- */
-
-static bool
-tpcl_send_command(
-    pappl_device_t *device,     // I - Device connection
-    const char     *command,    // I - Command string (without ESC, LF, NUL)
-    size_t         length)      // I - Length of command string
-{
-  if (!device || !command)
-    return (false);
-
-  // Send command in TPCL format: [ESC] command [LF] [NUL]
-  papplDeviceWrite(device, "\033", 1);       // ESC (0x1B)
-  papplDeviceWrite(device, command, length); // Command content
-  papplDeviceWrite(device, "\n", 1);         // LF (0x0A)
-  papplDeviceWrite(device, "\0", 1);         // NUL (0x00)
-  papplDeviceFlush(device);
-
-  return (true);
-}
-
-
-/*
  * 'tpcl_status_cb()' - Get printer status
  *
  * Queries the printer status using ESC WS command and evaluates response.
@@ -347,30 +320,53 @@ tpcl_status_cb(
   if (!device)
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open device connection for status query");
-    return (false);
+    return printer_ready;
   }
 
-  // Send ESC WS status query command using shared function
+  // Send ESC WS status query command
   if (!tpcl_send_command(device, "WS", 2))
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to send status query command");
     papplPrinterCloseDevice(printer);
-    return (false);
+    return printer_ready;
   }
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status query sent, waiting for response...");
 
-  // Give printer time to respond (up to 20ms according to documentation)
-  usleep(30000);  // Wait 30ms to be safe
+  // Poll for response with timeout
+  // Printer responds within 20ms according to documentation, poll up to 30ms to be safe
+  int poll_attempts = 0;
+  const int max_attempts = 30;        // Maximum polling attempts
+  const int poll_interval_us = 1000;  // 1ms between attempts (30ms total max)
 
-  // Read status response from printer
-  // Expected format: SOH STX Status(3 bytes) RemainingCount(4 bytes) ETX EOT CR LF (12 bytes total)
-  bytes = papplDeviceRead(device, status, sizeof(status) - 1);
-
-  if (bytes > 0)
+  bytes = 0;
+  while (poll_attempts < max_attempts)
   {
-    // Validate response format: SOH STX Status(3 bytes) RemainingCount(4 bytes) ETX EOT CR LF
-    if (bytes >= 12 && status[0] == 0x01 && status[1] == 0x02)
+    bytes = papplDeviceRead(device, status, sizeof(status) - 1);
+    if (bytes > 0)
+      break;  // Data received, exit polling loop
+
+    usleep(poll_interval_us);
+    poll_attempts++;
+  }
+
+  // Check if we got a response
+  if (bytes <= 0)
+  {
+    if (poll_attempts >= max_attempts)
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Timeout waiting for status response (%d ms)", max_attempts);
+    else
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Error reading status response (error code: %zd)", bytes);
+
+    papplPrinterCloseDevice(printer);
+    return printer_ready;
+  }
+
+  // Status response received
+  // Expected format: SOH STX Status(3 bytes, last byte is status type) RemainingCount(4 bytes) ETX EOT CR LF (12 bytes total)
+
+  // Validate response format
+  if (bytes >= 12 && status[0] == 0x01 && status[1] == 0x02)
     {
       // Extract status code (2 ASCII digits at positions 2-3)
       // Format is "XY" where X and Y are ASCII digit characters (0-9)
@@ -424,18 +420,9 @@ tpcl_status_cb(
           papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Unknown status code: %s", status_code);
       }
     }
-    else
-    {
-      papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Invalid status response format (received %zd bytes)", bytes);
-    }
-  }
-  else if (bytes == 0)
-  {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "No response received from printer");
-  }
   else
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to read status response (error code: %zd)", bytes);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Invalid status response format (received %zd bytes)", bytes);
   }
 
   // Close device connection
@@ -756,6 +743,32 @@ void tpcl_delete_cb(
     pappl_pr_driver_data_t *data)
 {
   return;
+}
+
+
+/*
+ * 'tpcl_send_command()' - Send a TPCL command to the printer
+ *
+ * Sends a command in TPCL format: [ESC] command [LF] [NUL]
+ * Returns true on success, false on failure.
+ */
+
+static bool
+tpcl_send_command(
+    pappl_device_t *device,     // I - Device connection
+    const char     *command,    // I - Command string (without ESC, LF, NUL)
+    size_t         length)      // I - Length of command string
+{
+  if (!device || !command) return false;
+
+  // Send command in TPCL format: [ESC] command [LF] [NUL]
+  papplDeviceWrite(device, "\033", 1);       // ESC (0x1B)
+  papplDeviceWrite(device, command, length); // Command content
+  papplDeviceWrite(device, "\n", 1);         // LF (0x0A)
+  papplDeviceWrite(device, "\0", 1);         // NUL (0x00)
+  papplDeviceFlush(device);
+
+  return true;
 }
 
 

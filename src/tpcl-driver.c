@@ -15,6 +15,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include "tpcl-driver.h"
 #include "dithering.h"
 //#include "tpcl-media.h" TODO remove
@@ -68,6 +69,7 @@ const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
  * Local functions
  */
 
+static bool tpcl_send_command(pappl_device_t *device, const char *command, size_t length);
 static void tpcl_topix_compress(tpcl_job_t *job, int y);
 static void tpcl_topix_output_buffer(pappl_device_t *device, tpcl_job_t *tpcl_job, int y);
 
@@ -298,17 +300,148 @@ tpcl_driver_cb(
 
 
 /*
+ * 'tpcl_send_command()' - Send a TPCL command to the printer
+ *
+ * Sends a command in TPCL format: [ESC] command [LF] [NUL]
+ * Returns true on success, false on failure.
+ */
+
+static bool
+tpcl_send_command(
+    pappl_device_t *device,     // I - Device connection
+    const char     *command,    // I - Command string (without ESC, LF, NUL)
+    size_t         length)      // I - Length of command string
+{
+  if (!device || !command)
+    return (false);
+
+  // Send command in TPCL format: [ESC] command [LF] [NUL]
+  papplDeviceWrite(device, "\033", 1);       // ESC (0x1B)
+  papplDeviceWrite(device, command, length); // Command content
+  papplDeviceWrite(device, "\n", 1);         // LF (0x0A)
+  papplDeviceWrite(device, "\0", 1);         // NUL (0x00)
+  papplDeviceFlush(device);
+
+  return (true);
+}
+
+
+/*
  * 'tpcl_status_cb()' - Get printer status
  *
- * Currently not implemented, just returns false. TODO
+ * Queries the printer status using ESC WS command and evaluates response.
+ * Returns true if printer is ready, false if error condition exists.
  */
 
 bool
 tpcl_status_cb(
     pappl_printer_t *printer)
 {
-  printf("Printer status check currently not implemented!");
-  return true;
+  pappl_device_t *device;             // Printer device connection
+  unsigned char  status[256];         // Status response buffer
+  ssize_t        bytes;               // Bytes read from printer
+  bool           printer_ready = false;
+
+  // Open connection to the printer device
+  device = papplPrinterOpenDevice(printer);
+  if (!device)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open device connection for status query");
+    return (false);
+  }
+
+  // Send ESC WS status query command using shared function
+  if (!tpcl_send_command(device, "WS", 2))
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to send status query command");
+    papplPrinterCloseDevice(printer);
+    return (false);
+  }
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status query sent, waiting for response...");
+
+  // Give printer time to respond (up to 20ms according to documentation)
+  usleep(30000);  // Wait 30ms to be safe
+
+  // Read status response from printer
+  // Expected format: SOH STX Status(3 bytes) RemainingCount(4 bytes) ETX EOT CR LF (12 bytes total)
+  bytes = papplDeviceRead(device, status, sizeof(status) - 1);
+
+  if (bytes > 0)
+  {
+    // Validate response format: SOH STX Status(3 bytes) RemainingCount(4 bytes) ETX EOT CR LF
+    if (bytes >= 12 && status[0] == 0x01 && status[1] == 0x02)
+    {
+      // Extract status code (2 ASCII digits at positions 2-3)
+      // Format is "XY" where X and Y are ASCII digit characters (0-9)
+      char status_code[3];
+      status_code[0] = status[2];
+      status_code[1] = status[3];
+      status_code[2] = '\0';
+
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status response: '%s'", status_code);
+
+      // Check status code against documented values (2 ASCII digits)
+      // Ready states: "00"=ready, "02"=operating, "40"=top cover closed, "41"=operating
+      if (strcmp(status_code, "00") == 0 || strcmp(status_code, "02") == 0 ||
+          strcmp(status_code, "40") == 0 || strcmp(status_code, "41") == 0)
+      {
+        printer_ready = true;
+        papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Printer ready (status: %s)", status_code);
+      }
+      else
+      {
+        // Log specific error conditions based on status code (2 ASCII digits)
+        if (strcmp(status_code, "01") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Top cover open");
+        else if (strcmp(status_code, "06") == 0 || strcmp(status_code, "07") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Command error");
+        else if (strcmp(status_code, "11") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Paper jam");
+        else if (strcmp(status_code, "12") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Paper jam at cutter");
+        else if (strcmp(status_code, "13") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Label out");
+        else if (strcmp(status_code, "15") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Ribbon out");
+        else if (strcmp(status_code, "16") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Ribbon out during print");
+        else if (strcmp(status_code, "18") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Fan motor malfunction");
+        else if (strcmp(status_code, "21") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Ribbon out");
+        else if (strcmp(status_code, "23") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Ribbon motor malfunction");
+        else if (strcmp(status_code, "50") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Print head overheat");
+        else if (strcmp(status_code, "51") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Print head overheat during print");
+        else if (strcmp(status_code, "54") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Main board overheat");
+        else if (strcmp(status_code, "55") == 0)
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Main board overheat during print");
+        else
+          papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Unknown status code: %s", status_code);
+      }
+    }
+    else
+    {
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Invalid status response format (received %zd bytes)", bytes);
+    }
+  }
+  else if (bytes == 0)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "No response received from printer");
+  }
+  else
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to read status response (error code: %zd)", bytes);
+  }
+
+  // Close device connection
+  papplPrinterCloseDevice(printer);
+
+  return (printer_ready);
 }
 
 
@@ -366,7 +499,7 @@ tpcl_rstartjob_cb(
   papplJobSetData(job, tpcl_job);
 
   // Send reset command to clear any previous state
-  papplDevicePuts(device, "{WS|}\n");
+  papplDevicePuts(device, "{WR|}\n");
 
   // Send default setup commands
   // TODO: These should be configurable via job options

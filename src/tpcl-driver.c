@@ -25,12 +25,9 @@
  * TPCL Graphics Modes
  */
 
-#define TEC_GMODE_TOPIX   1   // TOPIX compression (default, recommended)
-#define TEC_GMODE_HEX_AND 3   // Raw hex AND mode
+#define TEC_GMODE_HEX_AND 1   // Raw hex AND mode
+#define TEC_GMODE_TOPIX   3   // TOPIX compression (default, recommended)
 #define TEC_GMODE_HEX_OR  5   // Raw hex OR mode
-//#define TEC_GMODE_TOPIX   3
-//#define TEC_GMODE_HEX_AND 1
-//#define TEC_GMODE_HEX_OR  5
 
 /*
  * Job data structure
@@ -467,6 +464,11 @@ tpcl_print_cb(
 
 /*
  * 'tpcl_rstartjob_cb()' - Start a print job
+ *
+ * Sends job initialization commands per commands.md:
+ *   1. {WR|} - Reset printer state
+ *   2. {AX;±XX,±XX,±XX|} - Feed adjustments (feed, cut/peel, back feed)
+ *   3. {RM;X,X|} - Ribbon motor setup (forward, backward)
  */
 
 bool
@@ -475,23 +477,34 @@ tpcl_rstartjob_cb(
     pappl_pr_options_t *options,
     pappl_device_t     *device)
 {
-  printf(" Starting print job");
-
   tpcl_job_t *tpcl_job;
+
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Starting TPCL print job");
 
   // Allocate job data structure
   tpcl_job = (tpcl_job_t *)calloc(1, sizeof(tpcl_job_t));
-  if (!tpcl_job) return false;
+  if (!tpcl_job)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate job data structure");
+    return false;
+  }
 
   papplJobSetData(job, tpcl_job);
 
-  // Send reset command to clear any previous state
+  // Command 1: Send reset command to clear any previous state
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending reset command (WR)");
   papplDevicePuts(device, "{WR|}\n");
 
-  // Send default setup commands
+  // Command 2: Send feed adjustment command
   // TODO: These should be configurable via job options
-  papplDevicePuts(device, "{AX;+00,+00,+00|}\n");  // Feed adjustments (feed, cut, back)
-  papplDevicePuts(device, "{RM;0,0|}\n");          // Ribbon motor (forward, back)
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustments (AX;+00,+00,+00)");
+  papplDevicePuts(device, "{AX;+00,+00,+00|}\n");  // Feed, cut/peel, back feed
+
+  // Command 3: Send ribbon motor setup
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending ribbon motor setup (RM;0,0)");
+  papplDevicePuts(device, "{RM;0,0|}\n");  // Forward, backward motor settings
+
+  papplDeviceFlush(device);
 
   return true;
 }
@@ -499,6 +512,12 @@ tpcl_rstartjob_cb(
 
 /*
  * 'tpcl_rstartpage_cb()' - Start a page
+ *
+ * Sends page initialization commands per commands.md:
+ *   4. {DXXXX,XXXX,XXXX,XXXX|} - Label size definition (pitch, width, length, peel-off)
+ *   5. {AY;±XX,X|} - Temperature adjustment and thermal mode
+ *   6. {C|} - Clear image buffer
+ *   7. {SG;0000,0000,XXXX,XXXX,X,} - Graphics header (HEX mode only)
  */
 
 bool
@@ -508,17 +527,24 @@ tpcl_rstartpage_cb(
     pappl_device_t     *device,
     unsigned           page)
 {
-  printf(" Starting new page");
-
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   char       command[256];
   int        length, width, labelpitch, labelgap;
 
-  if (!tpcl_job) return false;
+  if (!tpcl_job)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Job data structure not initialized");
+    return false;
+  }
+
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Starting page %u", page);
 
   tpcl_job->page = page;
   tpcl_job->width = options->header.cupsBytesPerLine;
   tpcl_job->height = options->header.cupsHeight;
+
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Page dimensions: %dx%d pixels, %d bytes per line",
+              options->header.cupsWidth, options->header.cupsHeight, tpcl_job->width);
 
   // Calculate label dimensions in 0.1mm units (TPCL format)
   // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 254 / 72
@@ -527,21 +553,31 @@ tpcl_rstartpage_cb(
   labelgap = 30;  // 3mm default gap between labels
   labelpitch = length + labelgap;
 
-  // Send label size command: {Dlabelpitch,width,length,peeloff_position|}
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Label size: pitch=%d, width=%d, length=%d (in 0.1mm units)",
+              labelpitch, width, length);
+
+  // Command 4: Send label size command
   snprintf(command, sizeof(command),
            "{D%04d,%04d,%04d,%04d|}\n",
            labelpitch, width, length, width + labelgap);
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
   papplDevicePuts(device, command);
 
-  // Send temperature adjustment command: {AY;temp_adjust,ribbon_mode|}
+  // Command 5: Send temperature adjustment command
   // temp_adjust: +00 = normal, ribbon_mode: 0 = thermal transfer, 1 = direct thermal
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending temperature adjustment (AY;+00,0)");
   papplDevicePuts(device, "{AY;+00,0|}\n");
 
-  // Clear image buffer
+  // Command 6: Clear image buffer
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Clearing image buffer (C)");
   papplDevicePuts(device, "{C|}\n");
 
   // Determine graphics mode (default to TOPIX for best compression)
   tpcl_job->gmode = TEC_GMODE_TOPIX;
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using graphics mode: %d (%s)",
+              tpcl_job->gmode,
+              tpcl_job->gmode == TEC_GMODE_TOPIX ? "TOPIX" :
+              tpcl_job->gmode == TEC_GMODE_HEX_AND ? "HEX_AND" : "HEX_OR");
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -552,6 +588,7 @@ tpcl_rstartpage_cb(
 
     if (!tpcl_job->buffer || !tpcl_job->last_buffer || !tpcl_job->comp_buffer)
     {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate TOPIX compression buffers");
       if (tpcl_job->buffer) free(tpcl_job->buffer);
       if (tpcl_job->last_buffer) free(tpcl_job->last_buffer);
       if (tpcl_job->comp_buffer) free(tpcl_job->comp_buffer);
@@ -563,20 +600,29 @@ tpcl_rstartpage_cb(
 
     tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
     tpcl_job->comp_last_line = 0;
+
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers allocated: line=%d bytes, comp=65535 bytes",
+                tpcl_job->width);
   }
   else
   {
     // Allocate buffer for hex mode
     tpcl_job->buffer = malloc(tpcl_job->width);
     if (!tpcl_job->buffer)
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX mode");
       return false;
+    }
 
-    // Send graphics header for hex mode: {SG;x,y,width,height,mode,data|}
+    // Command 7: Send graphics header for hex mode
     snprintf(command, sizeof(command),
              "{SG;0000,0000,%04d,%04d,%d,",
              tpcl_job->width * 8, tpcl_job->height, tpcl_job->gmode);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending HEX mode graphics header: %s", command);
     papplDevicePuts(device, command);
   }
+
+  papplDeviceFlush(device);
 
   return true;
 }
@@ -584,6 +630,10 @@ tpcl_rstartpage_cb(
 
 /*
  * 'tpcl_rwriteline_cb()' - Write a line of raster data
+ *
+ * Per commands.md Write Line Stage:
+ *   - TOPIX mode: Compress lines and buffer, flush when buffer near full
+ *   - HEX mode: Write raw binary data directly
  */
 
 bool
@@ -597,7 +647,10 @@ tpcl_rwriteline_cb(
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
 
   if (!tpcl_job || !tpcl_job->buffer)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Job data or buffer not initialized", y);
     return false;
+  }
 
   // Copy line to buffer
   memcpy(tpcl_job->buffer, line, tpcl_job->width);
@@ -608,16 +661,21 @@ tpcl_rwriteline_cb(
     tpcl_topix_compress(tpcl_job, y);
 
     // Check if compression buffer is getting full, flush if needed
-    if ((tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer) >
-        (0xFFFF - (tpcl_job->width + ((tpcl_job->width / 8) * 3))))
+    // Buffer size is 0xFFFF, flush when less than (width + (width/8)*3) bytes remaining
+    size_t buffer_used = tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer;
+    size_t buffer_threshold = 0xFFFF - (tpcl_job->width + ((tpcl_job->width / 8) * 3));
+
+    if (buffer_used > buffer_threshold)
     {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%zu bytes), flushing",
+                  y, buffer_used);
       tpcl_topix_output_buffer(device, tpcl_job, y);
       memset(tpcl_job->last_buffer, 0, tpcl_job->width);
     }
   }
   else
   {
-    // Output raw hex data
+    // HEX mode: Output raw binary data directly
     papplDeviceWrite(device, tpcl_job->buffer, tpcl_job->width);
   }
 
@@ -626,7 +684,14 @@ tpcl_rwriteline_cb(
 
 
 /*
- * 'tpcl_rendpage()' - End a page
+ * 'tpcl_rendpage_cb()' - End a page
+ *
+ * Sends page finalization commands per commands.md:
+ *   9. IF TOPIX MODE: Final buffer flush
+ *   10. IF HEX MODE: Close graphics data with |}
+ *   12. {XS;I,XXXX,XXXXXXXXX|} - Execute print command
+ *   14. TCP WORKAROUND: 1024 spaces padding
+ *   15. DUMMY DATA: 600 null bytes (BEV4T workaround)
  */
 
 bool
@@ -636,41 +701,64 @@ tpcl_rendpage_cb(
     pappl_device_t     *device,
     unsigned           page)
 {
-  printf(" Ending current page");
-
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   char       command[256];
+  static unsigned char dummy_data[600] = {0};  // 600 null bytes for BEV4T workaround
 
-  if (!tpcl_job) return false;
+  if (!tpcl_job)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Job data structure not initialized");
+    return false;
+  }
 
-  // Flush any remaining TOPIX data or close hex graphics
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Ending page %u", page);
+
+  // Command 9/10: Flush any remaining TOPIX data or close hex graphics
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Flushing final TOPIX buffer");
     tpcl_topix_output_buffer(device, tpcl_job, 0);
   }
   else
   {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Closing HEX graphics data");
     papplDevicePuts(device, "|}\n");
   }
 
-  // Send print command: {XS;I,copies,cut+detect+mode+speed+media+mirror+status|}
-  // Format: cut(3 digits) + detect(1) + mode(1) + speed(1) + media(1) + mirror(1) + status(1)
-  // Simplified: copies=1, cut=0, detect=0, mode=C (tear-off), speed=3, media=1 (thermal), mirror=0, status=0
+  // Command 12: Send print command
+  // Format: {XS;I,copies,cut(3)+detect(1)+mode(1)+speed(1)+media(1)+mirror(1)+status(1)|}
+  // Parameters:
+  //   cut: 000-999 (cut quantity)
+  //   detect: 0-4 (media tracking/detect mode)
+  //   mode: C=tear-off, D=peel-off, E=rewind
+  //   speed: 2-A (2,3,4,5,6,8,A=10)
+  //   media: 0=direct thermal, 1=thermal transfer, 2=ribbon saving
+  //   mirror: 0=normal, 1=mirror
+  //   status: 0=no status, 1=with status
   snprintf(command, sizeof(command),
            "{XS;I,%04d,000%d%c%d%d%d%d|}\n",
            options->copies,
            0,    // detect (media tracking) - TODO: make configurable
-           'C',  // mode: C=tear-off, D=peel-off, E=rewind
-           3,    // speed
-           1,    // media: 0=direct thermal, 1=thermal transfer, 2=ribbon saving
+           'C',  // mode: C=tear-off, D=peel-off, E=rewind - TODO: make configurable
+           3,    // speed - TODO: use options->print_speed
+           1,    // media: thermal transfer - TODO: make configurable
            0,    // mirror
            0);   // status
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending print command: %s", command);
   papplDevicePuts(device, command);
 
-  // Send padding to avoid zero window error (TCP workaround)
+  // Command 14: Send padding to avoid TCP zero-window error (workaround)
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround)");
   papplDevicePrintf(device, "%1024s", "");
 
+  // Command 15: Send 600 null bytes dummy data (BEV4T last packet lost bug workaround)
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 600 null bytes (BEV4T workaround)");
+  papplDeviceWrite(device, dummy_data, sizeof(dummy_data));
+
+  papplDeviceFlush(device);
+
   // Free page buffers
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Freeing page buffers");
   if (tpcl_job->buffer)
   {
     free(tpcl_job->buffer);
@@ -693,6 +781,9 @@ tpcl_rendpage_cb(
 
 /*
  * 'tpcl_rendjob_cb()' - End a job
+ *
+ * Per commands.md: No specific commands sent at end of job.
+ * Just cleanup job data structure.
  */
 
 bool
@@ -701,13 +792,14 @@ tpcl_rendjob_cb(
     pappl_pr_options_t *options,
     pappl_device_t     *device)
 {
-  printf(" Ending current job");
-
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
+
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Ending TPCL print job");
 
   // Free job data structure
   if (tpcl_job)
   {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Freeing job data structure");
     free(tpcl_job);
     papplJobSetData(job, NULL);
   }

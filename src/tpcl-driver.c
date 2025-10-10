@@ -224,20 +224,22 @@ tpcl_driver_cb(
     // due to validation in PAPPL 1.4.9
 
     // Supported media
+    // Use roll media range for label printers - allows any size within range
     int media_idx = 0; // TODO this could lead to an overflow as it ignores PAPPL_MAX_MEDIA
-    driver_data->media[media_idx++] = "oe_103x199mm_4.055x7.835in";     // DHL label
-    driver_data->num_media = media_idx;              // Number of supported media
+    driver_data->media[media_idx++] = "roll_min_6x6mm";      // Minimum label size
+    driver_data->media[media_idx++] = "roll_max_203x330mm";  // Maximum label size (8" x 13")
+    driver_data->num_media = media_idx;                      // Number of supported media
 
     // Available media sources
     media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_SOURCE
-    driver_data->source[0] = "main-roll";            // Media sources
+    driver_data->source[media_idx++] = "main-roll";  // Media sources
 	  driver_data->num_source = media_idx;             // Number of media sources (trays/rolls)
 
     // Available media types
     media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_TYPE
-    driver_data->type[0] = "labels";                 // Media types
-    driver_data->type[1] = "labels-continuous";
-    driver_data->type[2] = "direct-thermal";
+    driver_data->type[media_idx++] = "labels";                 // Media types
+    driver_data->type[media_idx++] = "labels-continuous";
+    driver_data->type[media_idx++] = "direct-thermal";
     driver_data->num_type = media_idx;               // Number of media types
 
     // Fill out ready media TODO replace by function that reads available media sizes from a definition file
@@ -251,7 +253,7 @@ tpcl_driver_cb(
       // TODO all of the following should not be hard coded
       driver_data->media_ready[i].size_width    = 10300;                   // Width in hundredths of millimeters
       driver_data->media_ready[i].size_length   = 19900;                   // Height in hundredths of millimeters
-      papplCopyString(driver_data->media_ready[i].size_name, "oe_103x199mm_4.055x7.835in", sizeof(driver_data->media_ready[i].size_name)); // Media name
+      papplCopyString(driver_data->media_ready[i].size_name, "na_4x8_4x8in", sizeof(driver_data->media_ready[i].size_name)); // Use closest standard PWG media name
 
       papplCopyString(driver_data->media_ready[i].source, driver_data->source[i], sizeof(driver_data->media_ready[i].source)); // PWG media source name
       driver_data->media_ready[i].top_margin    = driver_data->bottom_top; // Top margin in hundredths of millimeters

@@ -15,7 +15,7 @@ PAPPL_LIBS = -lavahi-common -lavahi-client -lssl -lcrypto -ljpeg -lpng16 -lusb-1
 TARGET = tpcl-printer-app
 
 # Source files
-SOURCES = tpcl-printer-app.c tpcl-driver.c
+SOURCES = $(wildcard *.c)
 OBJECTS = $(SOURCES:.c=.o)
 
 # Headers

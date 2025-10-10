@@ -11,10 +11,13 @@
  * Licensed under GNU GPL v3.
  */
 
+// TODO: Replace memmove etc with papplCopyString
+
 #include <string.h>
 #include <math.h>
 #include "tpcl-driver.h"
-#include "tpcl-media.h"
+#include "dithering.h"
+//#include "tpcl-media.h" TODO remove
 
 
 /*
@@ -24,7 +27,9 @@
 #define TEC_GMODE_TOPIX   1   // TOPIX compression (default, recommended)
 #define TEC_GMODE_HEX_AND 3   // Raw hex AND mode
 #define TEC_GMODE_HEX_OR  5   // Raw hex OR mode
-
+//#define TEC_GMODE_TOPIX   3
+//#define TEC_GMODE_HEX_AND 1
+//#define TEC_GMODE_HEX_OR  5
 
 /*
  * Job data structure
@@ -68,45 +73,68 @@ static void tpcl_topix_output_buffer(pappl_device_t *device, tpcl_job_t *tpcl_jo
 
 
 /*
- * Raster printing and status callbacks
+ * Raster printing callbacks.
  */
 
-static bool	tpcl_print(
+bool tpcl_driver_cb(
+    pappl_system_t         *system,
+    const char             *driver_name,
+    const char             *device_uri,
+    const char             *device_id,
+    pappl_pr_driver_data_t *driver_data,
+    ipp_t                  **driver_attrs,
+    void                   *data);
+
+bool tpcl_status_cb(
+    pappl_printer_t *printer);
+
+void tpcl_identify_cb(
+    pappl_printer_t          *printer, 
+    pappl_identify_actions_t actions, 
+    const char               *message);
+
+bool tpcl_print_cb(
     pappl_job_t *job, 
     pappl_pr_options_t *options, 
     pappl_device_t *device);
 
-static bool tpcl_rendjob(
+bool tpcl_rstartjob_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device);
 
-static bool tpcl_rendpage(
+bool tpcl_rstartpage_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device,
     unsigned           page);
 
-static bool tpcl_rstartjob(
-    pappl_job_t        *job,
-    pappl_pr_options_t *options,
-    pappl_device_t     *device);
-
-static bool tpcl_rstartpage(
-    pappl_job_t        *job,
-    pappl_pr_options_t *options,
-    pappl_device_t     *device,
-    unsigned           page);
-
-static bool tpcl_rwriteline(
+bool tpcl_rwriteline_cb(
     pappl_job_t         *job,
     pappl_pr_options_t  *options,
     pappl_device_t      *device,
     unsigned            y,
     const unsigned char *line);
 
-static bool tpcl_status(
-    pappl_printer_t *printer);
+bool tpcl_rendpage_cb(
+    pappl_job_t        *job,
+    pappl_pr_options_t *options,
+    pappl_device_t     *device,
+    unsigned           page);
+
+bool tpcl_rendjob_cb(
+    pappl_job_t        *job,
+    pappl_pr_options_t *options,
+    pappl_device_t     *device);
+
+const char* tpcl_testpage_cb(
+    pappl_printer_t *printer,
+    char *buffer,
+    size_t bufsize);
+
+void tpcl_delete_cb(
+    pappl_printer_t *printer,
+    pappl_pr_driver_data_t *data);
 
 
 /*
@@ -128,163 +156,210 @@ tpcl_driver_cb(
 
   (void)data;
 
+  // Costom driver extensions
+  //driver_data->extension;                             // Extension data (managed by driver)
+
   // Set callbacks
-  driver_data->printfile_cb  = tpcl_print;
-  driver_data->rendjob_cb    = tpcl_rendjob;
-  driver_data->rendpage_cb   = tpcl_rendpage;
-  driver_data->rstartjob_cb  = tpcl_rstartjob;
-  driver_data->rstartpage_cb = tpcl_rstartpage;
-  driver_data->rwriteline_cb = tpcl_rwriteline;
-  driver_data->status_cb     = tpcl_status;
-  driver_data->has_supplies  = true;
+  driver_data->status_cb     = tpcl_status_cb;          // Printer status callback. TODO: Implement
+  driver_data->identify_cb   = tpcl_identify_cb;        // Identify-Printer callback (eg. make a sound). TODO: Implement
+  driver_data->printfile_cb  = tpcl_print_cb;           // Print (raw) file callback. TODO: Implement
+  driver_data->rstartjob_cb  = tpcl_rstartjob_cb;       // Start raster job callback
+  driver_data->rstartpage_cb = tpcl_rstartpage_cb;      // Start raster page callback
+  driver_data->rwriteline_cb = tpcl_rwriteline_cb;      // Write raster line callback
+  driver_data->rendpage_cb   = tpcl_rendpage_cb;        // End raster page callback
+  driver_data->rendjob_cb    = tpcl_rendjob_cb;         // End raster job callback
+  driver_data->testpage_cb   = tpcl_testpage_cb;        // Test page print callback. TODO: Implement
+  driver_data->delete_cb     = tpcl_delete_cb;          // Printer deletion callback. TODO: Implement
 
-  // Basic driver information
-  driver_data->format = "application/vnd.toshiba-tpcl";
-
-
-
-printf("Hello stdout! Position is %d\n", 1);
-  // Set basic driver information
-  strncpy(driver_data->make_and_model, "Toshiba TEC TPCL v2 Label Printer",
-          sizeof(driver_data->make_and_model) - 1);
-  driver_data->make_and_model[sizeof(driver_data->make_and_model) - 1] = '\0';
-
-  // Pages per minute (labels per minute for label printers)
-  driver_data->ppm = 30;  // Typical for thermal label printers
-  driver_data->ppm_color = 0;  // Monochrome only
-
-  // Printer kind
-  driver_data->kind = PAPPL_KIND_LABEL;
-
-  // Supported resolutions (203dpi = 8 dots/mm, 300dpi = 12 dots/mm, 600dpi = 24 dots/mm)
-  driver_data->num_resolution = 3;
-  driver_data->x_resolution[0] = 203;
-  driver_data->y_resolution[0] = 203;
-  driver_data->x_resolution[1] = 300;
-  driver_data->y_resolution[1] = 300;
-  driver_data->x_resolution[2] = 600;
-  driver_data->y_resolution[2] = 600;
-  driver_data->x_default = driver_data->y_default = 203;
-
-  // Color support - monochrome only
-  driver_data->color_supported = PAPPL_COLOR_MODE_MONOCHROME;
-  driver_data->color_default = PAPPL_COLOR_MODE_MONOCHROME;
-
-  // Raster types supported
-  driver_data->raster_types = PAPPL_PWG_RASTER_TYPE_BLACK_1 |
+  // Model-agnostic printer options
+  dither_threshold16(driver_data->gdither, 128);        // dithering for 'auto', 'text', and 'graphic' TODO let user choose cutoff
+  dither_bayer16(driver_data->pdither);                 // dithering for 'photo'
+  driver_data->format = "application/vnd.toshiba-tpcl"; // Native file format
+  driver_data->ppm = 10;                                // Pages per minute (guesstimate)
+  driver_data->ppm_color = 0;                           // No color printing
+  //pappl_icon_t icons[3];                              // "printer-icons" values. TODO: Implement
+  driver_data->kind = PAPPL_KIND_LABEL;		            	// "printer-kind" values
+  driver_data->has_supplies = false;                    // Printer can report supplies. TODO: Implement
+  driver_data->input_face_up = true;		                // Does input media come in face-up?
+  driver_data->output_face_up = true;		                // Does output media come out face-up?
+  driver_data->orient_default = IPP_ORIENT_NONE;        // "orientation-requested-default" value
+  driver_data->color_supported = PAPPL_COLOR_MODE_MONOCHROME;   // Highest supported color mode
+  driver_data->color_default = PAPPL_COLOR_MODE_MONOCHROME;     // Default color mode
+  driver_data->content_default = PAPPL_CONTENT_AUTO;    // "print-content-default" value
+  driver_data->quality_default = IPP_QUALITY_NORMAL;    // "print-quality-default" value
+  driver_data->scaling_default = PAPPL_SCALING_AUTO;    // "print-scaling-default" value
+  driver_data->raster_types = PAPPL_PWG_RASTER_TYPE_BLACK_1 |   // IPP supported color schemes / raster types TODO check if correct, missing grayscale
                               PAPPL_PWG_RASTER_TYPE_BLACK_8;
+  driver_data->force_raster_type = PAPPL_PWG_RASTER_TYPE_NONE;  // Force a particular raster type?
+  driver_data->duplex = PAPPL_DUPLEX_NONE;              // Duplex printing modes supported
+  driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED; // "sides-supported" values
+  driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;   // "sides-default" value
+  driver_data->borderless = true;                       // Borderless margins supported?
+  driver_data->left_right = 0;                          // Left and right margins in hundredths of millimeters
+  driver_data->bottom_top = 0;                          // Bottom and top margins in hundredths of millimeters	
 
-  // Common label sizes - using standard PWG media names
-  // We define a selection of common sizes instead of roll_min/roll_max
-// Use roll media for label printers - allows any size within range
-// Range: 6x6mm (min) to 203x330mm (max)
-//driver_data->num_media = 2;
-//driver_data->media[0] = "roll_min_6x6mm";
-//driver_data->media[1] = "roll_max_203x330mm";
-  // due to validation in PAPPL 1.4.9
-  int media_idx = 0;
-  driver_data->media[media_idx++] = "oe_address-label_1.125x3.5in";  // Address label
-  driver_data->media[media_idx++] = "oe_1.25x0.25in_31.75x6.35mm";    // Small
-  driver_data->media[media_idx++] = "oe_1.25x2.25in_31.75x57.15mm";   // Narrow
-  driver_data->media[media_idx++] = "oe_2x1in_50.8x25.4mm";           // 2x1
-  driver_data->media[media_idx++] = "oe_2x4in_50.8x101.6mm";          // 2x4
-  driver_data->media[media_idx++] = "oe_3x5in_76.2x127mm";            // 3x5
-  driver_data->media[media_idx++] = "oe_4x5in_101.6x127mm";           // 4x5
-  driver_data->media[media_idx++] = "oe_4x6in_101.6x152.4mm";         // 4x6 shipping
-  driver_data->media[media_idx++] = "oe_6x4in_152.4x101.6mm";         // 6x4
-  driver_data->media[media_idx++] = "oe_100x150mm_3.937x5.906in";     // 100x150mm
-  driver_data->media[media_idx++] = "oe_103x199mm_4.055x7.835in";     // DHL label
-  driver_data->num_media = media_idx;
+  // Model-specific printer options
+  if (true) {                                           // TODO actually determine the printer
+    strncpy(driver_data->make_and_model, "Toshiba TEC TPCL v2 Label Printer", // TODO use more specific name for each printer
+      sizeof(driver_data->make_and_model) - 1);
+    driver_data->make_and_model[sizeof(driver_data->make_and_model) - 1] = '\0';
+    driver_data->finishings = PAPPL_FINISHINGS_NONE; // "finishings-supported" values
 
-  // Default media size (4" x 5" / 101.6x127mm is common for labels)
-  // media_default is a pappl_media_col_t structure
-  memset(&driver_data->media_default, 0, sizeof(driver_data->media_default));
-  strncpy(driver_data->media_default.size_name, "oe_4x5in_101.6x127mm",
-          sizeof(driver_data->media_default.size_name) - 1);
-  driver_data->media_default.size_width = 10160;   // 101.6mm in hundredths of mm
-  driver_data->media_default.size_length = 12700;  // 127mm in hundredths of mm
-  strncpy(driver_data->media_default.source, "main-roll",
-          sizeof(driver_data->media_default.source) - 1);
-  strncpy(driver_data->media_default.type, "labels",
-          sizeof(driver_data->media_default.type) - 1);
+    // Supported resolutions (203dpi = 8 dots/mm, 300dpi = 12 dots/mm, 600dpi = 24 dots/mm)
+    driver_data->num_resolution = 2;                 // Number of printer resolutions
+    driver_data->x_resolution[0] = 203;              // Horizontal printer resolutions
+    driver_data->x_resolution[1] = 300;
+    driver_data->y_resolution[0] = 203;              // Vertical printer resolutions
+    driver_data->y_resolution[1] = 300;
+    driver_data->x_default = 203;                    // Default horizontal resolution
+    driver_data->y_default = 203;                    // Default vertical resolution
 
-  // Media sources (single roll/tray)
-  driver_data->num_source = 1;
-  driver_data->source[0] = "main-roll";
+    // Common label sizes - using standard PWG media names - TODO clean and move to roll definitions, which currently does not work as PAPPL rejects the print job
+    // Use roll media for label printers - allows any size within range
+    // Range: 6x6mm (min) to 203x330mm (max)
+    //driver_data->num_media = 2;
+    //driver_data->media[0] = "roll_min_6x6mm";
+    //driver_data->media[1] = "roll_max_203x330mm";
+    //WORKAROUND We define a selection of common sizes instead of roll_min/roll_max
+    // due to validation in PAPPL 1.4.9
 
-  // Media types
-  driver_data->num_type = 3;
-  driver_data->type[0] = "labels";
-  driver_data->type[1] = "labels-continuous";
-  driver_data->type[2] = "direct-thermal";
+    // Supported media
+    int media_idx = 0; // TODO this could lead to an overflow as it ignores PAPPL_MAX_MEDIA
+    driver_data->media[media_idx++] = "oe_103x199mm_4.055x7.835in";     // DHL label
+    driver_data->num_media = media_idx;              // Number of supported media
 
-  // Print speeds (inches per second)
-  driver_data->speed_supported[0] = 2;
+    // Available media sources
+    media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_SOURCE
+    driver_data->source[0] = "main-roll";            // Media sources
+	  driver_data->num_source = media_idx;             // Number of media sources (trays/rolls)
+
+    // Available media types
+    media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_TYPE
+    driver_data->type[0] = "labels";                 // Media types
+    driver_data->type[1] = "labels-continuous";
+    driver_data->type[2] = "direct-thermal";
+    driver_data->num_type = media_idx;               // Number of media types
+
+    // Fill out ready media TODO replace by function that reads available media sizes from a definition file
+    for (int i = 0; i < driver_data->num_source; i ++)
+    {
+      driver_data->media_ready[i].bottom_margin = driver_data->bottom_top; // Bottom margin in hundredths of millimeters
+      driver_data->media_ready[i].left_margin   = driver_data->left_right; // Left margin in hundredths of millimeters
+      driver_data->media_ready[i].left_offset   = 0;                       // Left offset in hundredths of millimeters
+      driver_data->media_ready[i].right_margin  = driver_data->left_right; // Right margin in hundredths of millimeters
+
+      // TODO all of the following should not be hard coded
+      driver_data->media_ready[i].size_width    = 10300;                   // Width in hundredths of millimeters
+      driver_data->media_ready[i].size_length   = 19900;                   // Height in hundredths of millimeters
+      papplCopyString(driver_data->media_ready[i].size_name, "oe_103x199mm_4.055x7.835in", sizeof(driver_data->media_ready[i].size_name)); // Media name
+
+      papplCopyString(driver_data->media_ready[i].source, driver_data->source[i], sizeof(driver_data->media_ready[i].source)); // PWG media source name
+      driver_data->media_ready[i].top_margin    = driver_data->bottom_top; // Top margin in hundredths of millimeters
+      driver_data->media_ready[i].top_offset    = 0;                       // Top offset in hundredths of millimeters
+      driver_data->media_ready[i].tracking      = 0;                       // IPP media tracking type, we have no tracking
+
+      papplCopyString(driver_data->media_ready[i].type, driver_data->type[0],  sizeof(driver_data->media_ready[i].type)); // PWG media type name
+    }
+
+    driver_data->media_default = driver_data->media_ready[0]; // Default media
+  }
+
+  driver_data->left_offset_supported[0] = 0;         // media-left-offset-supported (0,0 for none)
+  driver_data->left_offset_supported[1] = 0;
+  driver_data->top_offset_supported[0] = 0;          // media-top-offset-supported (0,0 for none)
+  driver_data->top_offset_supported[1] = 0;
+  driver_data->num_bin = 0;                          // Number of output bins
+  //driver_data->*bin[PAPPL_MAX_BIN];                // Output bins
+  //driver_data->bin_default;                        // Default output bin
+  driver_data->mode_configured = 0;                  // label-mode-configured TODO set coorect flag
+  driver_data->mode_supported = 0;                   // label-mode-supported TODO set correct flag
+  driver_data->tear_offset_configured = 0;           // label-tear-offset-configured TODO set correct flag
+  driver_data->tear_offset_supported[0] = 0;         // label-tear-offset-supported (0,0 for none) TODO set via user
+  driver_data->tear_offset_supported[1] = 0;
+  driver_data->speed_supported[0] = 2;               // print-speed-supported (in inches per second?) (0,0 for none) TODO check value correctness
   driver_data->speed_supported[1] = 10;
-  driver_data->speed_default = 3;
+  driver_data->speed_default = 3;                    // print-speed-default TODO check value correctness
 
-  // Margins (label printers have no margins)
-  driver_data->left_right = 0;
-  driver_data->bottom_top = 0;
-
-  // Duplex not supported
-  driver_data->duplex = PAPPL_DUPLEX_NONE;
-  driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED;
-  driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;
-
-  // Finishings (cutter support)
-  driver_data->finishings = PAPPL_FINISHINGS_TRIM;
-
-  // Additional defaults
-  driver_data->orient_default = IPP_ORIENT_NONE;
-  driver_data->quality_default = IPP_QUALITY_NORMAL;
-  driver_data->content_default = PAPPL_CONTENT_AUTO;
-  driver_data->scaling_default = PAPPL_SCALING_AUTO;
-
-  // Identify actions
-  driver_data->identify_supported = PAPPL_IDENTIFY_ACTIONS_SOUND;
-  driver_data->identify_default = PAPPL_IDENTIFY_ACTIONS_SOUND;
-
-  // Initialize media_ready for the main roll
-  // For label printers with roll media, use the default size
-  memcpy(&driver_data->media_ready[0], &driver_data->media_default,
-         sizeof(pappl_media_col_t));
-
-  printf("Hello stdout! Position is %d\n", 3);
+  // TODO 
+  //driver_data->darkness_default;                   // print-darkness-default
+  //driver_data->darkness_configured;                // printer-darkness-configured
+  //driver_data->darkness_supported;                 // printer/print-darkness-supported (0 for none)
+  //driver_data->identify_default;                   // "identify-actions-default" values
+  //driver_data->identify_supported;                 // "identify-actions-supported" values
+  //driver_data->num_features;                       // Number of "ipp-features-supported" values
+  //driver_data->*features[PAPPL_MAX_VENDOR];        // "ipp-features-supported" values
+  //driver_data->num_vendor;                         // Number of vendor attributes
+  //driver_data->*vendor[PAPPL_MAX_VENDOR];          // Vendor attribute names
 
   return true;
 }
 
-    // Use raster callbacks - TODO is this correct? "Print (raw) file callback"
-static bool
-tpcl_print(
+
+/*
+ * 'tpcl_status_cb()' - Get printer status
+ *
+ * Currently not implemented, just returns false. TODO
+ */
+
+bool
+tpcl_status_cb(
+    pappl_printer_t *printer)
+{
+  printf("Printer status check currently not implemented!");
+  return true;
+}
+
+
+/*
+ * 'tpcl_identify_cb()' - Identify printer
+ *
+ * Currently not implemented. TODO
+ */
+
+void tpcl_identify_cb(
+    pappl_printer_t          *printer, 
+    pappl_identify_actions_t actions, 
+    const char               *message)
+{
+  printf("Printer identification currently not implemented!");
+  return;
+}
+
+
+/*
+ * 'tpcl_print_cb()' - Print raw file callback
+ *
+ * Currently not implemented, just returns false. TODO
+ */
+
+bool
+tpcl_print_cb(
     pappl_job_t *job, 
     pappl_pr_options_t *options, 
     pappl_device_t *device)
 {
-  // TODO: Print
-  // For now, just return true (print is OK)
-  printf("Hello stdout! Position is %d\n", 5);
-
-  return true;
+  printf("Raw file printing currently not implemented!");
+  return false;
 }
 
+
 /*
- * 'tpcl_rstartjob()' - Start a print job
+ * 'tpcl_rstartjob_cb()' - Start a print job
  */
 
-static bool
-tpcl_rstartjob(
+bool
+tpcl_rstartjob_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device)
 {
+  printf(" Starting print job");
+
   tpcl_job_t *tpcl_job;
 
   // Allocate job data structure
   tpcl_job = (tpcl_job_t *)calloc(1, sizeof(tpcl_job_t));
-  if (!tpcl_job)
-    return false;
+  if (!tpcl_job) return false;
 
   papplJobSetData(job, tpcl_job);
 
@@ -301,22 +376,23 @@ tpcl_rstartjob(
 
 
 /*
- * 'tpcl_rstartpage()' - Start a page
+ * 'tpcl_rstartpage_cb()' - Start a page
  */
 
-static bool
-tpcl_rstartpage(
+bool
+tpcl_rstartpage_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device,
     unsigned           page)
 {
+  printf(" Starting new page");
+
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   char       command[256];
   int        length, width, labelpitch, labelgap;
 
-  if (!tpcl_job)
-    return false;
+  if (!tpcl_job) return false;
 
   tpcl_job->page = page;
   tpcl_job->width = options->header.cupsBytesPerLine;
@@ -385,11 +461,11 @@ tpcl_rstartpage(
 
 
 /*
- * 'tpcl_rwriteline()' - Write a line of raster data
+ * 'tpcl_rwriteline_cb()' - Write a line of raster data
  */
 
-static bool
-tpcl_rwriteline(
+bool
+tpcl_rwriteline_cb(
     pappl_job_t         *job,
     pappl_pr_options_t  *options,
     pappl_device_t      *device,
@@ -431,18 +507,19 @@ tpcl_rwriteline(
  * 'tpcl_rendpage()' - End a page
  */
 
-static bool
-tpcl_rendpage(
+bool
+tpcl_rendpage_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device,
     unsigned           page)
 {
+  printf(" Ending current page");
+
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   char       command[256];
 
-  if (!tpcl_job)
-    return false;
+  if (!tpcl_job) return false;
 
   // Flush any remaining TOPIX data or close hex graphics
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
@@ -493,15 +570,17 @@ tpcl_rendpage(
 
 
 /*
- * 'tpcl_rendjob()' - End a job
+ * 'tpcl_rendjob_cb()' - End a job
  */
 
-static bool
-tpcl_rendjob(
+bool
+tpcl_rendjob_cb(
     pappl_job_t        *job,
     pappl_pr_options_t *options,
     pappl_device_t     *device)
 {
+  printf(" Ending current job");
+
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
 
   // Free job data structure
@@ -516,16 +595,32 @@ tpcl_rendjob(
 
 
 /*
- * 'tpcl_status()' - Get printer status
+ * 'tpcl_testpage_cb()' - Print test file callback
+ *
+ * Currently not implemented, just returns NULL. TODO
  */
 
-static bool
-tpcl_status(
-    pappl_printer_t *printer)
+const char* tpcl_testpage_cb(
+    pappl_printer_t *printer,
+    char *buffer,
+    size_t bufsize)
 {
-  // TODO: Query actual printer status via TPCL commands
-  // For now, just return true (printer is OK)
-  return true;
+  printf("Test file printing currently not implemented!");
+  return NULL;
+}
+
+
+/*
+ * 'tpcl_delete_cb()' - Callback for deleting a printer
+ *
+ * Currently not implemented, just exists so server does not crash. TODO
+ */
+
+void tpcl_delete_cb(
+    pappl_printer_t *printer,
+    pappl_pr_driver_data_t *data)
+{
+  return;
 }
 
 
@@ -542,7 +637,7 @@ tpcl_topix_compress(
     int        y)
 {
   int           i, l1, l2, l3, max, width;
-  unsigned char line[8][9][9] = {{0}};
+  unsigned char line[8][9][9] = {{{0}}};
   unsigned char cl1, cl2, cl3, xor;
   unsigned char *ptr;
 

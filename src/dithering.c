@@ -10,6 +10,7 @@
 
 #include <pappl/pappl.h>
 #include <math.h>
+#include "dithering.h"
 
 
 /*

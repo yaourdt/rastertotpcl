@@ -535,6 +535,26 @@ void tpcl_identify_cb(
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
 
+  // Validate dimensions are within printer limits
+  // 203dpi: pitch max 9990 (999.0mm), height max 9970 (997.0mm)
+  // 300dpi: pitch max 4572 (457.2mm), height max 4552 (455.2mm)
+  int max_pitch = (driver_data.y_default == 300) ? 4572 : 9990;
+  int max_height = (driver_data.y_default == 300) ? 4552 : 9970;
+
+  if (label_pitch > max_pitch)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Label pitch %d (0.1mm) exceeds maximum %d (0.1mm) for %ddpi resolution", label_pitch, max_pitch, driver_data.y_default);
+    papplPrinterCloseDevice(printer);
+    return;
+  }
+
+  if (print_height > max_height)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Print height %d (0.1mm) exceeds maximum %d (0.1mm) for %ddpi resolution", print_height, max_height, driver_data.y_default);
+    papplPrinterCloseDevice(printer);
+    return;
+  }
+
   // Send label size command
   snprintf(
     command,
@@ -805,9 +825,29 @@ tpcl_rstartjob_cb(
 
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));
-  
+
   // Calculate buffer length in bytes as sent to printer
   tpcl_job->buffer_len = options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel;
+
+  // Validate dimensions are within printer limits before sending label size command
+  // 203dpi: pitch max 9990 (999.0mm), height max 9970 (997.0mm)
+  // 300dpi: pitch max 4572 (457.2mm), height max 4552 (455.2mm)
+  int max_pitch = (options->header.HWResolution[1] == 300) ? 4572 : 9990;
+  int max_height = (options->header.HWResolution[1] == 300) ? 4552 : 9970;
+
+  if (tpcl_job->label_pitch > max_pitch)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Label pitch %d (0.1mm) exceeds maximum %d (0.1mm) for %udpi resolution", tpcl_job->label_pitch, max_pitch, options->header.HWResolution[1]);
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  if (tpcl_job->print_height > max_height)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Print height %d (0.1mm) exceeds maximum %d (0.1mm) for %udpi resolution", tpcl_job->print_height, max_height, options->header.HWResolution[1]);
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
 
   // Send label size command
   snprintf(
@@ -828,7 +868,7 @@ tpcl_rstartjob_cb(
     snprintf(
       command,
       sizeof(command),
-      "{D%04d,%04d,%04d,%04d|}\n",  // TODO "{AX;+00,+00,+00|}\n" 
+      "{AX%04d,%04d,%04d,%04d|}\n",  // TODO "{AX;+00,+00,+00|}\n" 
       0,
       0,
       0,
@@ -844,7 +884,7 @@ tpcl_rstartjob_cb(
     snprintf(
       command,
       sizeof(command),
-      "{D%04d,%04d,%04d,%04d|}\n",  // TODO "{AY;+00,0|}\n"
+      "{AY%04d,%04d,%04d,%04d|}\n",  // TODO "{AY;+00,0|}\n"
       0,
       0,
       0,

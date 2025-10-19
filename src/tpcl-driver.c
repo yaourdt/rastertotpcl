@@ -70,11 +70,12 @@ typedef struct {
   int                      print_height;                 // Effective print height (0.1mm)
   int                      label_pitch;                  // Label pitch = print height + 5mm gap
   int                      roll_width;                   // Roll width  = print width + 5mm margin
+  unsigned int             buffer_len;                   // Length of line buffer as sent to printer
   unsigned char            *buffer;                      // Current line buffer
   unsigned char            *last_buffer;                 // Previous line buffer (for TOPIX)
   unsigned char            *comp_buffer;                 // Compression buffer (for TOPIX)
   unsigned char            *comp_buffer_ptr;             // Current position in comp_buffer (for TOPIX)
-  int                      comp_last_line;               // Last line number sent (for TOPIX)
+  int                      y_offset;                     // Y offset for next image in 0.1mm (for TOPIX)
 } tpcl_job_t;
 
 
@@ -159,18 +160,19 @@ void tpcl_delete_cb(
  */
 
 static void tpcl_free_job_buffers(
+  pappl_job_t              *job,
   tpcl_job_t               *tpcl_job
 );
 
 static void tpcl_topix_compress(
-  tpcl_job_t               *tpcl_job,
-  int                      y
+  pappl_pr_options_t       *options,
+  tpcl_job_t               *tpcl_job
 );
 
-static void tpcl_topix_output_buffer(
+static ssize_t tpcl_topix_output_buffer(
+  pappl_pr_options_t       *options,
   pappl_device_t           *device,
-  tpcl_job_t               *tpcl_job,
-  int                      y
+  tpcl_job_t               *tpcl_job
 );
 
 
@@ -394,7 +396,7 @@ tpcl_status_cb(
   }
   else if (bytes == 0)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Timeout waiting for status response (%is)", poll_attempts);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Timeout waiting for status response (%ds)", poll_attempts);
     papplPrinterCloseDevice(printer);
     return printer_ready;
   }
@@ -419,7 +421,7 @@ tpcl_status_cb(
     status_code[0] = status[2];
     status_code[1] = status[3];
     status_code[2] = '\0';
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status response: '%s' after %is", status_code, poll_attempts);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status response: '%s' after %ds", status_code, poll_attempts);
 
     // Check status code against documented values: "00"=ready, "02"=operating, "40"=print succeeded, "41"=feed succeeded
     if (strcmp(status_code, "00") == 0 || strcmp(status_code, "02") == 0 ||
@@ -748,13 +750,23 @@ tpcl_rstartjob_cb(
   papplJobSetData(job, tpcl_job);
 
   // Set graphics mode 
-  // TODO: Add support for TOPIX compression and let user choose
+  // TODO: Add support for TOPIX compression and let user choose. for not 150 or 300 dpi, do not allow topix mode
   //tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
   //tpcl_job->gmode = TEC_GMODE_HEX_AND;
   tpcl_job->gmode = TEC_GMODE_TOPIX;
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
+    // Check if resolution is 150 or 300, as TOPIX mode does not work with other resolutions
+    if ((options->header.HWResolution[0] != 150 && options->header.HWResolution[0] != 300) ||
+        (options->header.HWResolution[1] != 150 && options->header.HWResolution[1] != 300) ||
+        (options->header.HWResolution[0] != options->header.HWResolution[1]))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "TOPIX mode only supports 150x150 or 300x300 dpi resolution. Requested: %ux%u dpi", options->header.HWResolution[0], options->header.HWResolution[1]);
+      tpcl_free_job_buffers(job, tpcl_job);
+      return false;
+    }
+
     // Allocate buffers for TOPIX compression
     tpcl_job->buffer      = malloc(options->header.cupsBytesPerLine);
     tpcl_job->last_buffer = malloc(options->header.cupsBytesPerLine);
@@ -762,7 +774,7 @@ tpcl_rstartjob_cb(
 
     if (!tpcl_job->buffer || !tpcl_job->last_buffer || !tpcl_job->comp_buffer)
     {
-      tpcl_free_job_buffers(tpcl_job);
+      tpcl_free_job_buffers(job, tpcl_job);
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate TOPIX compression buffers");
       return false;
     }
@@ -775,7 +787,7 @@ tpcl_rstartjob_cb(
 
     if (!tpcl_job->buffer)
     {
-      tpcl_free_job_buffers(tpcl_job);
+      tpcl_free_job_buffers(job, tpcl_job);
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX / Nibble mode");
       return false;
     }
@@ -794,6 +806,9 @@ tpcl_rstartjob_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));
   
+  // Calculate buffer length in bytes as sent to printer
+  tpcl_job->buffer_len = options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel;
+
   // Send label size command
   snprintf(
     command,
@@ -860,7 +875,7 @@ tpcl_rstartjob_cb(
  *
  * Sends page initialization commands:
  *   1. {C|} -> Clear image buffer
- *   2. (if not TOPIX compression) {SG;aaaa,bbbb,cccc,dddd,e,... -> Image headers
+ *   2. (if not TOPIX compression) {SG;aaaa,bbbbb,cccc,ddddd,e,... -> Image headers
  */
 
 bool
@@ -894,7 +909,7 @@ tpcl_rstartpage_cb(
     memset(tpcl_job->comp_buffer, 0, 0xFFFF);
 
     tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
-    tpcl_job->comp_last_line = 0;
+    tpcl_job->y_offset = 0;
 
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers zeroed: line=%u bytes, comp=65535 bytes", options->header.cupsBytesPerLine);
   }
@@ -904,7 +919,7 @@ tpcl_rstartpage_cb(
     snprintf(
       command,
       sizeof(command),
-      "{SG;0000,0000,%04u,%04u,%d,",
+      "{SG;0000,00000,%04u,%05u,%d,",
                                                          // x_origin TODO margin
                                                          // y_origin TODO margin
       options->header.cupsWidth,                         // width_dots
@@ -925,7 +940,7 @@ tpcl_rstartpage_cb(
  * Dithers, inverts and compresses each line of data, then sends it to the device.
  * 
  * With TOPIX compression we need automatic buffer flushing, so command order is:
- *   1. {SG0;aaaa,bbbb,cccc,dddd,e,ffff,... -> Image headers (start and flush)
+ *   1. {SG;aaaa,bbbbb,cccc,ddddd,e,... -> Image headers (start and flush)
  *   2. ...ggg---ggg... -> Compressed image body (always)
  *   3. ...|} -> Command footer (flush and end)
  * If the image is larger than the available buffer (TOPIX has a upper limit of 0xFFFF (approx. 65 kb)
@@ -967,7 +982,7 @@ tpcl_rwriteline_cb(
     }
 
     // Clear output buffer
-    memset(tpcl_job->buffer, 0, options->header.cupsBytesPerLine / 8);
+    memset(tpcl_job->buffer, 0, tpcl_job->buffer_len);
 
     // Dither and pack to 8 pixels per output byte, MSB-first. PAPPL auto-selects the appropriate dither array.
     for (unsigned int x = 0; x < options->header.cupsBytesPerLine; x++)
@@ -992,7 +1007,7 @@ tpcl_rwriteline_cb(
   else
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Only 1 bit or 8 bit color depths are supported, request was for %u bit", y, options->header.cupsBitsPerPixel);
-    tpcl_free_job_buffers(tpcl_job);
+    tpcl_free_job_buffers(job, tpcl_job);
     return false;
   }
 
@@ -1004,7 +1019,7 @@ tpcl_rwriteline_cb(
       papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Flipping bits to translate from white ink plane (1 = white) to black ink plane (1 = black)", y);
     }
 
-    for (unsigned int x = 0; x < (options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel); x++)
+    for (unsigned int x = 0; x < tpcl_job->buffer_len; x++)
     {
       tpcl_job->buffer[x] = (unsigned char)~tpcl_job->buffer[x];
     }
@@ -1012,7 +1027,7 @@ tpcl_rwriteline_cb(
   else if (options->header.cupsColorSpace != CUPS_CSPACE_K)
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Only K(3) and SW(18) color spaces supported, request was for space (%d)", y, options->header.cupsColorSpace);
-    tpcl_free_job_buffers(tpcl_job);
+    tpcl_free_job_buffers(job, tpcl_job);
     return false;
   }
 
@@ -1021,10 +1036,10 @@ tpcl_rwriteline_cb(
   {
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in hex mode", y, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in hex mode", y, tpcl_job->buffer_len);
     }
 
-    papplDeviceWrite(device, tpcl_job->buffer, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel);
+    papplDeviceWrite(device, tpcl_job->buffer, tpcl_job->buffer_len);
   }
   else if ((tpcl_job->gmode == TEC_GMODE_NIBBLE_AND) | (tpcl_job->gmode == TEC_GMODE_NIBBLE_OR))
   {
@@ -1033,14 +1048,14 @@ tpcl_rwriteline_cb(
 
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in nibble mode (ASCII mode)", y, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel * 2);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in nibble mode (ASCII mode)", y, tpcl_job->buffer_len * 2);
     }
 
     // Debug output: allocate buffer for ASCII representation file dump
     char *debug_buffer = NULL;
     if (papplSystemGetLogLevel(papplPrinterGetSystem(papplJobGetPrinter(job))) >= PAPPL_LOGLEVEL_DEBUG)
     {
-      unsigned int line_chars = (options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel) * 2;
+      unsigned int line_chars = tpcl_job->buffer_len * 2;
       debug_buffer = malloc(line_chars + 1);
       if (debug_buffer)
       {
@@ -1048,7 +1063,7 @@ tpcl_rwriteline_cb(
       }
     }
 
-    for (unsigned int x = 0; x < options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel; x++)
+    for (unsigned int x = 0; x < tpcl_job->buffer_len; x++)
     {
       // Split into two ASCII bytes: 0x30 | nibble
       unsigned char out[2] = {
@@ -1100,44 +1115,37 @@ tpcl_rwriteline_cb(
   }
   else if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
-    //...
+    // TOPIX compression mode. Always compress line into compression buffer and check if buffer is close to full.
+    // If buffer is close to full, send data to printer, increment y-offset and zero buffers to start a new run
 
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in TOPIX mode", y, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel * 2);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Compressing %u bytes in TOPIX mode", y, tpcl_job->buffer_len);
     }
 
-    // First line or buffer flushed (comp_buffer == comp_buffer_ptr)
-    // - send headers
-
     // Compress line using TOPIX algorithm
-    //tpcl_topix_compress(tpcl_job, y);
+    tpcl_topix_compress(options, tpcl_job);
 
-    // Check if compression buffer is getting full, flush if needed
-    // Buffer size is 0xFFFF, flush when less than (width + (width/8)*3) bytes remaining
-    //size_t buffer_used = tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer;
-    //size_t buffer_threshold = 0xFFFF - (tpcl_job->width + ((tpcl_job->width / 8) * 3));
+    // Check if compression buffer is getting full, flush if needed. Also flush if this is the last line
+    size_t buffer_used      = tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer;
+    size_t buffer_threshold = 0xFFFF - (tpcl_job->buffer_len + ((tpcl_job->buffer_len / 8) * 3));
 
-    //if (buffer_used > buffer_threshold)
-    //{
-    //  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%zu bytes), flushing",
-    //              y, buffer_used);
-      //tpcl_topix_output_buffer(device, tpcl_job, y);
-    //  memset(tpcl_job->last_buffer, 0, tpcl_job->width);
-   // }
+    if ((buffer_used > buffer_threshold) | (y == (options->header.cupsHeight - 1)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%lu/65535 bytes) or last line, flushing. Y offset for this image: %d (0.1mm)", y, buffer_used, tpcl_job->y_offset);
+      
+      ssize_t bytes_written = tpcl_topix_output_buffer(options, device, tpcl_job);
 
-      // Last line: Flush any remaining TOPIX data or close hex/nibble graphics
-  //if (tpcl_job->gmode == TEC_GMODE_TOPIX)
-  //{
-  //  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Flushing final TOPIX buffer");
-  //  tpcl_topix_output_buffer(device, tpcl_job, 0);
-  //}
+      // Y offset for next image in 0.1mm (for TOPIX)
+      tpcl_job->y_offset = (y + 1) * 254 / options->header.HWResolution[0];
 
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer flushed, %lu bytes sent. Y offset for next image: %d (0.1mm)", y, bytes_written, tpcl_job->y_offset);
+    }
   }
   else
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Graphics transmission mode %d not supported", y, tpcl_job->gmode);
-    tpcl_free_job_buffers(tpcl_job);
+    tpcl_free_job_buffers(job, tpcl_job);
     return false;
   }
 
@@ -1248,8 +1256,7 @@ tpcl_rendjob_cb(
   }
 
   // Free buffers
-  tpcl_free_job_buffers(tpcl_job);
-  papplJobSetData(job, NULL);
+  tpcl_free_job_buffers(job, tpcl_job);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Freeing page buffers and job data structure");
 
   return true;
@@ -1293,6 +1300,7 @@ void tpcl_delete_cb(
  */
 
 static void tpcl_free_job_buffers(
+  pappl_job_t              *job,
   tpcl_job_t               *tpcl_job
 )
 {
@@ -1303,6 +1311,8 @@ static void tpcl_free_job_buffers(
     if (tpcl_job->comp_buffer) free(tpcl_job->comp_buffer);
     free(tpcl_job);
   }
+
+  papplJobSetData(job, NULL);
   return;
 }
 
@@ -1316,32 +1326,32 @@ static void tpcl_free_job_buffers(
 
 static void
 tpcl_topix_compress(
-  tpcl_job_t               *tcpl_job,
-  int                      y //TODO remove not needed
+  pappl_pr_options_t       *options,
+  tpcl_job_t               *tpcl_job
 )
 {
-  int           i, l1, l2, l3, max, width;
-  unsigned char line[8][9][9] = {{{0}}};
-  unsigned char cl1, cl2, cl3, xor;
-  unsigned char *ptr;
+  int                      i = 0;                        // Index into buffer
+  int                      l1, l2, l3;                   // Current positions in line
+  int                      max = 8 * 9 * 9;              // Max number of items per line
+  unsigned int             width;                        // Max width of the line
+  unsigned char            line[8][9][9] = {{{0}}};      // Current line (L1 x L2 x L3)
+  unsigned char            cl1, cl2, cl3;                // Current characters
+  unsigned char            xor;                          // Current XORed character
+  unsigned char            *ptr;                         // Pointer into the Compressed Line Buffer
 
-  width = tcpl_job->width;
-  max = 8 * 9 * 9;
+  width = tpcl_job->buffer_len;
 
-  // Perform XOR with previous line for differential compression
-  // Build 3-level index structure: Level1[8], Level2[9], Level3[9]
+  // Perform XOR with previous line for differential compression in a 3-level index structure
   cl1 = 0;
-  i = 0;
-
   for (l1 = 0; l1 <= 7 && i < width; l1++)
   {
     cl2 = 0;
     for (l2 = 1; l2 <= 8 && i < width; l2++)
     {
       cl3 = 0;
-      for (l3 = 1; l3 <= 8 && i < width; l3++, i++)
+      for (l3 = 1; l3 <= 8 && i < width; l3++, i++)      // Careful, this loop increments two variables!
       {
-        xor = tcpl_job->buffer[i] ^ tcpl_job->last_buffer[i];
+        xor = tpcl_job->buffer[i] ^ tpcl_job->last_buffer[i];
         line[l1][l2][l3] = xor;
         if (xor > 0)
         {
@@ -1351,16 +1361,20 @@ tpcl_topix_compress(
       }
       line[l1][l2][0] = cl3;
       if (cl3 != 0)
+      {
         cl2 |= (1 << (8 - l2));
+      }
     }
     line[l1][0][0] = cl2;
     if (cl2 != 0)
+    {
       cl1 |= (1 << (7 - l1));
+    }
   }
 
-  // Always add CL1 byte to compressed buffer
-  *tcpl_job->comp_buffer_ptr = cl1;
-  tcpl_job->comp_buffer_ptr++;
+  // Always add L1 index byte to beginning of compressed buffer section (line) and move pointer one step forward
+  *tpcl_job->comp_buffer_ptr = cl1;
+  tpcl_job->comp_buffer_ptr++;
 
   // Copy only non-zero bytes to compressed buffer
   if (cl1 > 0)
@@ -1370,15 +1384,15 @@ tpcl_topix_compress(
     {
       if (*ptr != 0)
       {
-        *tcpl_job->comp_buffer_ptr = *ptr;
-        tcpl_job->comp_buffer_ptr++;
+        *tpcl_job->comp_buffer_ptr = *ptr;
+        tpcl_job->comp_buffer_ptr++;
       }
       ptr++;
     }
   }
 
   // Copy current line to last_buffer for next iteration
-  memcpy(tcpl_job->last_buffer, tcpl_job->buffer, width);
+  memcpy(tpcl_job->last_buffer, tpcl_job->buffer, width);
 }
 
 
@@ -1386,58 +1400,42 @@ tpcl_topix_compress(
  * 'tpcl_topix_output_buffer()' - Send TOPIX compressed data to printer
  */
 
-static void
+static ssize_t
 tpcl_topix_output_buffer(
+  pappl_pr_options_t       *options,
   pappl_device_t           *device,
-  tpcl_job_t               *tpcl_job,
-  int                      y
+  tpcl_job_t               *tpcl_job
 )
 {
-  unsigned short len, belen;
-  char           command[256];
+  char                     command[256];
+  unsigned short           len, belen;                   // Buffer length and big endian buffer length
+  ssize_t                  bytes_written = 0;
 
-  len = (unsigned short)(tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer);
-
-  // DEBUG: Always log buffer state
-  fprintf(stderr, "DEBUG tpcl_topix_output_buffer: len=%u, y=%d\n", len, y);
-
-  if (len == 0)
-  {
-    fprintf(stderr, "DEBUG tpcl_topix_output_buffer: Buffer empty, returning\n");
-    return;
-  }
-
-  // Convert length to big-endian (network byte order)
-  belen = (len << 8) | (len >> 8);
+  len   = (unsigned short)(tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer);
+  belen = (len << 8) | (len >> 8);                       // Convert length to big-endian (network byte order)
+  if (len == 0) { return bytes_written; }
 
   // Send SG command with compressed data
-  // Format: {SG;x,y,width,height,mode,length+data|}
-  // Calculate height: if final flush (y=0), send total height, otherwise send number of lines since last flush
-  int height = y ? (y - tpcl_job->comp_last_line) : tpcl_job->height;
+  snprintf(
+    command,
+    sizeof(command),
+    "{SG;0000,%05d,%04u,%05u,%d,",
+                                                         // x_origin in 0.1mm TODO margin
+    tpcl_job->y_offset,                                  // y_origin in 0.1mm TODO margin
+    options->header.cupsWidth,                           // width_dots
+    options->header.HWResolution[0],                     // in TOPIX mode: Resolution of graphic data (150 or 300 dpi)
+    tpcl_job->gmode                                      // graphics mode
+  );
 
-  snprintf(command, sizeof(command),
-           "{SG;0000,%04d,%04d,%04d,%d,",
-           tpcl_job->comp_last_line,
-           tpcl_job->width * 8,
-           height,
-           tpcl_job->gmode);
-
-  fprintf(stderr, "DEBUG: Sending TOPIX command: %s\n", command);
-  fprintf(stderr, "DEBUG: Sending %u bytes of compressed data (big-endian len: 0x%04x)\n", len, belen);
-
-  ssize_t bytes_written = 0;
-  bytes_written += papplDevicePuts(device, command);
-  bytes_written += papplDeviceWrite(device, &belen, 2);              // Big-endian length
+  bytes_written += papplDevicePuts (device, command);
+  bytes_written += papplDeviceWrite(device, &belen, 2);                   // Total length of graphic data
   bytes_written += papplDeviceWrite(device, tpcl_job->comp_buffer, len);  // Compressed data
-  bytes_written += papplDevicePuts(device, "|}\n");
+  bytes_written += papplDevicePuts (device, "|}\n");
 
-  papplDeviceFlush(device);
-  fprintf(stderr, "DEBUG: Device flushed\n");
-
-  if (y)
-    tpcl_job->comp_last_line = y;
-
-  // Reset compression buffer
+  // Reset buffers and pointers
   memset(tpcl_job->comp_buffer, 0, 0xFFFF);
+  memset(tpcl_job->last_buffer, 0, tpcl_job->buffer_len);
   tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
+
+  return bytes_written;
 }

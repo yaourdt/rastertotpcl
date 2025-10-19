@@ -1,94 +1,64 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# TPCL Printer App - Claude Code Context
 
 ## Project Overview
 
-This is a CUPS raster driver for Toshiba TEC label printers supporting TPCL (TEC Printer Command Language) version 2. It converts CUPS Raster graphics into TPCL-formatted print jobs with TOPIX compression.
+This project is migrating from a PPD-based raster filter for Toshiba Tec Label Printers (TPCL v2 protocol) to a new IPP implementation based on the PAPPL framework.
 
-The driver consists of:
-- **rastertotpcl** - Main C filter that converts CUPS raster data to TPCL commands
-- **PPD files** - Generated from tectpcl2.drv for various Toshiba TEC printer models
-- **TOPIX compression** - Custom compression algorithm for efficient print data transmission
+## Directory Structure
 
-## Build Commands
+- `src_old/` - Legacy PPD-based filter implementation (reference only)
+- `src/` - New PAPPL-based implementation (active development)
 
-### Prerequisites
-**Linux:**
+## Development Workflow
+
+### Building and Running
+
+Execute from within the `src/` directory:
+
 ```bash
-sudo apt-get install build-essential libcups2-dev cups-ppdc
+make clean && make && sudo ./tpcl-printer-app server -o log-level=debug
 ```
 
-**macOS:**
-Install Xcode from the App Store.
+### Viewing Logs
 
-### Building
+Monitor the application logs in real-time:
+
 ```bash
-make                 # Compile rastertotpcl filter and generate PPD files
-make clean           # Clean build artifacts
+sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 ```
 
-### Installation
+### Testing Print Jobs
+
+**IMPORTANT**: Always confirm with the user before starting a print job.
+
+Test print command example:
+
 ```bash
-sudo make install    # Install filter and PPD files to CUPS directories
-sudo make uninstall  # Remove installed driver components
+ipptool -tv -f /home/yaurdt/Downloads/tux.png ipp://localhost:8000/ipp/print/TestPrinter print-job.test
 ```
 
-## Architecture
+## Key Technologies
 
-### Main Filter (src/rastertotpcl.c)
+- **PAPPL Framework** - Printer Application framework
+- **IPP** - Internet Printing Protocol
+- **TPCL v2** - Toshiba Tec Printer Command Language version 2
 
-The filter processes raster data through several stages:
+## Current Status
 
-1. **Setup()** - Initialize printer with TPCL commands including:
-   - Feed adjustment parameters (AX command)
-   - Ribbon motor setup (RM command)
-   - Reset command (WS command)
+Based on recent commits:
+- Printer status polling implemented
+- Status code reading functional
+- Working on image rendering (test image printing in progress)
+- Line callback implementation in development
 
-2. **StartPage()** - For each page:
-   - Calculate label dimensions and gaps (D command)
-   - Set temperature adjustments (AY command)
-   - Clear image buffer (C command)
-   - Choose graphics mode: TOPIX compression (mode 1) or raw hex (modes 3/5)
+## Git Information
 
-3. **OutputLine()** - Process each raster line:
-   - If TOPIX mode: calls TOPIXCompress() for differential compression
-   - If hex mode: outputs raw 8-bit graphics data
+- Current branch: `release/0.2.0`
+- Main branch: `main` (use for PRs)
 
-4. **EndPage()** - Finish page with:
-   - Output remaining compressed data
-   - Set print parameters (XS command): copies, media tracking, speed, thermal mode
-   - Optional cutter activation (IB command)
+## Notes for Development
 
-### TOPIX Compression
-
-TOPIX is a 3-level hierarchical compression algorithm implemented in TOPIXCompress():
-- Performs XOR with previous line to find changed bytes
-- Builds 3-tier index structure (8×9×9 bytes)
-- Only transmits changed data and index bytes
-- Outputs via SG command with big-endian length prefix
-
-The compression buffer (0xFFFF bytes) is flushed when near capacity to avoid overruns.
-
-### PPD Generation (src/tectpcl2.drv)
-
-The .drv file defines printer configurations with:
-- Media sizes in labelmedia.h (from address labels to 103×199mm sheets)
-- Printer-specific parameters: resolution, speed, ribbon settings
-- UI options: graphics mode, media tracking, print speed, feed adjustments
-- Localization support via .po files in po/ directory
-
-PPDs are generated using `ppdc` compiler on Linux, or pre-compiled on macOS.
-
-## Platform-Specific Notes
-
-**macOS:** System Integrity Protection prevents writing to standard CUPS data directories. PPD files install to `$(cups-config --serverroot)/ppd/` instead.
-
-**Linux:** Driver files install to standard CUPS directories retrieved via `cups-config`.
-
-## Key Files
-
-- `src/rastertotpcl.c` - Main filter implementation (950 lines)
-- `src/tectpcl2.drv` - PPD driver definitions
-- `src/labelmedia.h` - Media size definitions for label printers
-- `src/Makefile` - Build configuration with platform detection
+- The project is actively being developed in the `src/` directory
+- Old implementation in `src_old/` should only be used as a reference
+- Always run with sudo due to printer access requirements
+- Log level can be adjusted via the `-o log-level=debug` option

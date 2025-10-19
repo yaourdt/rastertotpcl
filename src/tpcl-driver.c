@@ -16,17 +16,12 @@
 // TODO: Persist previous page size between job runs to use (T) command. two options:
 //       - papplSystemSetSaveCallback() ,papplPrinterSetSaveCallback() <- needs printer dependence!
 //       - papplPrinterAddAttr(printer, IPP_TAG_INTEGER, "myapp-my-var", value);
-// TODO: Implement identification callback
-// TODO: Implement raw print callback
 // TODO: Implement testpage callback
 // TODO: Implement delete printer callback
 // TODO: Clean out printer properties in tpcl_driver_cb
 // TODO: Document, that this driver assumes, all pages in a job are of the same size
 // TODO: Implement printer autodetection
-// TODO: in rwriteline check if the receive buffer is full, then abort
-// TODO: in rwriteline add dithering
-
-// Start kommende Woche: Problem mit der Buffer allocation ab Zeile 557 beheben. 
+// in den rasterdruck callbacks korrektes free wenn wegen fehler unterwegs abgebrochen wird
 
 #include <string.h>
 #include <math.h>
@@ -39,9 +34,11 @@
  * TPCL Graphics Modes
  */
 
-#define TEC_GMODE_HEX_AND 1                              // Raw hex AND mode
-#define TEC_GMODE_TOPIX   3                              // TOPIX compression (default, recommended)
-#define TEC_GMODE_HEX_OR  5                              // Raw hex OR mode
+#define TEC_GMODE_NIBBLE_AND 0                           // Raw nibble AND mode (4 dots/byte, 16-level grayscale)
+#define TEC_GMODE_HEX_AND    1                           // Raw hex AND mode (8 dots/byte, black & white)
+#define TEC_GMODE_TOPIX      3                           // TOPIX compression (default, recommended)
+#define TEC_GMODE_NIBBLE_OR  4                           // Raw nibble OR mode (4 dots/byte, 16-level grayscale)
+#define TEC_GMODE_HEX_OR     5                           // Raw hex OR mode (8 dots/byte, black & white)
 
 
 /*
@@ -217,13 +214,18 @@ tpcl_driver_cb(
   driver_data->input_face_up = true;		                 // Does input media come in face-up?
   driver_data->output_face_up = true;		                 // Does output media come out face-up?
   driver_data->orient_default = IPP_ORIENT_NONE;         // "orientation-requested-default" value
-  driver_data->color_supported = PAPPL_COLOR_MODE_MONOCHROME;    // Highest supported color mode
-  driver_data->color_default = PAPPL_COLOR_MODE_MONOCHROME;      // Default color mode
-  driver_data->content_default = PAPPL_CONTENT_AUTO;     // "print-content-default" value
+  driver_data->color_supported =                         // Highest supported color mode advertised via IPP
+    PAPPL_COLOR_MODE_BI_LEVEL  |                         //  - black & white
+    PAPPL_COLOR_MODE_MONOCHROME;                         //  - grayscale
+  driver_data->color_default =                           // Default color mode 
+    PAPPL_COLOR_MODE_BI_LEVEL;
+  driver_data->content_default = PAPPL_CONTENT_AUTO;     // Optimize for vector graphics or image content
   driver_data->quality_default = IPP_QUALITY_NORMAL;     // "print-quality-default" value
   driver_data->scaling_default = PAPPL_SCALING_AUTO;     // "print-scaling-default" value
-  driver_data->raster_types = PAPPL_PWG_RASTER_TYPE_BLACK_1 |    // IPP supported color schemes / raster types TODO check if correct, missing grayscale
-                              PAPPL_PWG_RASTER_TYPE_BLACK_8;
+  driver_data->raster_types =                            // Supported color schemes by our driver callback
+    PAPPL_PWG_RASTER_TYPE_BLACK_1 |                      // - black & white 1 bit
+    PAPPL_PWG_RASTER_TYPE_BLACK_8 |                      // - black & white 8 bit
+    PAPPL_PWG_RASTER_TYPE_SGRAY_8;                       // - grayscale 8 bit
   driver_data->force_raster_type = PAPPL_PWG_RASTER_TYPE_NONE;   // Force a particular raster type?
   driver_data->duplex = PAPPL_DUPLEX_NONE;               // Duplex printing modes supported
   driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED;  // "sides-supported" values
@@ -478,35 +480,231 @@ tpcl_status_cb(
 /*
  * 'tpcl_identify_cb()' - Identify printer
  *
- * Currently not implemented. TODO
+ * Feeds one label using the following commands:
+ *   1. {Daaaa,bbbb,cccc,dddd|} -> Label size definition
+ *   2. {Tabcde|} -> Feed label
  */
 
 void tpcl_identify_cb(
-  pappl_printer_t          *printer, 
-  pappl_identify_actions_t actions, 
+  pappl_printer_t          *printer,
+  pappl_identify_actions_t actions,
   const char               *message
 )
 {
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Printer identification currently not implemented");
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Printer identification triggered: Eject one label");
+
+  pappl_device_t           *device;                      // Printer device connection
+  pappl_pr_driver_data_t   driver_data;                  // Driver data
+  char                     command[256];                 // Command buffer
+  int                      print_width;                  // Effective print width (0.1mm)
+  int                      print_height;                 // Effective print height (0.1mm)
+  int                      label_pitch;                  // Label pitch with gap (0.1mm)
+  int                      roll_width;                   // Full roll width (0.1mm)
+
+  // Open connection to the printer device
+  device = papplPrinterOpenDevice(printer);
+  if (!device)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open device connection for printer identification");
+    return;
+  }
+
+  // Get driver data to access media settings
+  if (!papplPrinterGetDriverData(printer, &driver_data))
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data for printer identification");
+    papplPrinterCloseDevice(printer);
+    return;
+  }
+
+  // Calculate dimensions from media_default (in hundredths of mm)
+  // Convert from hundredths of mm to tenths of mm (TPCL format)
+  print_width  = driver_data.media_default.size_width / 10;   // Effective print width
+  print_height = driver_data.media_default.size_length / 10;  // Effective print height
+
+  // Add 5mm (50 tenths of mm) to each dimension for label pitch and roll width
+  label_pitch = print_height + 50;  // Label pitch = print height + 5mm gap
+  roll_width  = print_width + 50;   // Roll width = print width + 5mm margin
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
+
+  // Send label size command
+  snprintf(
+    command,
+    sizeof(command),
+    "{D%04d,%04d,%04d,%04d|}\n",
+    label_pitch,
+    print_width,
+    print_height,
+    roll_width
+  );
+  papplDevicePuts(device, command);
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
+
+  // Send feed command
+
+  /*
+  [ESC] Tabcde [LF] [NUL]
+  
+a: Type of sensor
+0: No sensor
+1: Reflective sensor
+2: Transmissive sensor (when using normal labels)
+3: Transmissive sensor (when using normal labels)
+4: Reflective sensor
+
+b: Selects cut or non-cut
+0: Non-cut
+1: Cut
+
+c: Feed mode
+C: Batch mode (Cut and feed when “Cut” is selected for parameter b.)
+D: Strip mode (with back feed)
+E: Strip mode (Reserved for future)
+F: Partial cut mode (Non back feed cut mode)
+
+d: Feedspeed
+1: 2 inches/sec (2 inches/sec for the 300 dpi model)
+2: 2 inches/sec (2 inches/sec for the 300 dpi model)
+3: 3 inches/sec (3 inches/sec for the 300 dpi model)
+4: 4 inches/sec (4 inches/sec for the 300 dpi model)
+5: 5 inches/sec (4 inches/sec for the 300 dpi model)
+6: 5 inches/sec (4 inches/sec for the 300 dpi model)
+7: 5 inches/sec (4 inches/sec for the 300 dpi model)
+8: 5 inches/sec (4 inches/sec for the 300 dpi model)
+9: 5 inches/sec (4 inches/sec for the 300 dpi model)
+A: 5 inches/sec (4 inches/sec for the 300 dpi model)
+B: 5 inches/sec. (4 inches/sec for the 300 dpi model)
+
+e: With/without ribbon
+Direct thermal models:
+Set to 0. (If “1” or “2” is specified, a ribbon error results.)
+Thermal transfer models:
+0: Without ribbon
+1: With ribbon
+2: With ribbon
+
+*/
+  snprintf(
+    command,
+    sizeof(command),
+    "{T20C10|}\n"
+     //TODO: actually calculate from label size and other settings
+  );
+  papplDevicePuts(device, command);
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+
+  papplDeviceFlush(device);
   return;
 }
 
 
 /*
- * 'tpcl_print_cb()' - Print raw file callback
+ * 'tpcl_print_cb()' - Print raw TPCL file callback
  *
- * Currently not implemented, just returns false. TODO
+ * Reads a file containing TPCL commands (format: application/vnd.toshiba-tpcl)
+ * and sends them directly to the printer. Each command is on a separate line
+ * and ends with '\n' in the format: '{...|}\n'
+ * Lines starting with '#' are treated as comments and skipped.
  */
 
 bool
 tpcl_print_cb(
-  pappl_job_t              *job, 
-  pappl_pr_options_t       *options, 
+  pappl_job_t              *job,
+  pappl_pr_options_t       *options,
   pappl_device_t           *device
 )
 {
-  papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Raw file printing currently not implemented for TPCL V2 driver");
-  return false;
+  int                      fd;                           // File descriptor
+  char                     line[131072];                 // Buffer for reading lines (128KB)
+  ssize_t                  bytes_read;                   // Bytes read from file
+  size_t                   line_pos = 0;                 // Current position in line buffer
+  unsigned int             command_count = 0;            // Number of commands sent
+  char                     ch;                           // Current character
+
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Starting raw TPCL file printing");
+
+  // Open the job file for reading
+  fd = open(papplJobGetFilename(job), O_RDONLY);
+  if (fd < 0)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to open job file: %s", strerror(errno));
+    return false;
+  }
+
+  // Read file character by character and process line by line
+  while ((bytes_read = read(fd, &ch, 1)) > 0)
+  {
+    // Add character to line buffer
+    if (line_pos < sizeof(line) - 1)
+    {
+      line[line_pos++] = ch;
+    }
+    else
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line too long (exceeds %zu bytes), truncating", sizeof(line));
+      line[sizeof(line) - 1] = '\0';
+      close(fd);
+      return false;
+    }
+
+    // Process complete line when newline is encountered
+    if (ch == '\n')
+    {
+      line[line_pos] = '\0';  // Null-terminate the line
+
+      // Skip empty lines and comment lines (starting with '#')
+      if (line_pos > 1 && line[0] != '#')
+      {
+        // Send the TPCL command to the printer
+        papplDeviceWrite(device, line, line_pos);
+        command_count++;
+
+        // Log every 10th command to avoid excessive logging
+        if (command_count % 10 == 0)
+        {
+          papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sent %u TPCL commands to printer", command_count);
+        }
+      }
+      else if (line[0] == '#')
+      {
+        papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Skipping comment: %s", line);
+      }
+
+      // Reset line buffer for next line
+      line_pos = 0;
+    }
+  }
+
+  // Check for read errors
+  if (bytes_read < 0)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Error reading job file: %s", strerror(errno));
+    close(fd);
+    return false;
+  }
+
+  // Process any remaining data in buffer (line without trailing newline)
+  if (line_pos > 0)
+  {
+    line[line_pos] = '\0';
+
+    // Skip if it's a comment
+    if (line[0] != '#')
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_WARN, "Last line missing newline terminator, sending anyway: %s", line);
+      papplDeviceWrite(device, line, line_pos);
+      command_count++;
+    }
+  }
+
+  // Flush device buffer to ensure all commands are sent
+  papplDeviceFlush(device);
+
+  papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Raw TPCL file printing completed: %u commands sent", command_count);
+
+  close(fd);
+  return true;
 }
 
 
@@ -514,10 +712,10 @@ tpcl_print_cb(
  * 'tpcl_rstartjob_cb()' - Start a print job
  *
  * Creates job data structure and sends job initialization commands:
- *   1. (if labe size changed) {Daaaa,bbbb,cccc,dddd|} -> Label size definition
+ *   1. {Daaaa,bbbb,cccc,dddd|} -> Label size definition
  *   2. (if not zero) {AX;abbb,cddd,eff|} -> Position fine adjustment
  *   3. (if not zero) {AY;abb,c|} -> Print density fine adjustment
- *   4. (if labe size changed) {Tabcde|} -> Feed page
+ *   4. (if labe size changed) {Tabcde|} -> Feed label
  * 
  * Note: We assume, that all pages of a job are of the same length!
  */
@@ -542,19 +740,10 @@ tpcl_rstartjob_cb(
   }
   papplJobSetData(job, tpcl_job);
 
-  // Calculate label dimensions in 0.1mm units (TPCL format)
-  // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 254 / 72
-  tpcl_job->width  = (int)(options->header.cupsPageSize[0] * 254.0 / 72.0); // TODO check if this should be cupsImagingBBox
-  tpcl_job->height = (int)(options->header.cupsPageSize[1] * 254.0 / 72.0); // TODO check if this should be cupsImagingBBox
-  tpcl_job->gap    = 30; // 3mm default gap between labels TODO let user set this -> cupsPageSize?
-  tpcl_job->peel   = 30; // 3mm default gap between label and side of roll TODO let user set this -> cupsPageSize?
-
-  // Determine graphics mode (default to TOPIX for best compression) - TODO let user choose
-  tpcl_job->gmode = 1; //TEC_GMODE_TOPIX; TODO
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using graphics mode: %d (%s)",
-              tpcl_job->gmode,
-              tpcl_job->gmode == TEC_GMODE_TOPIX ? "TOPIX" :
-              tpcl_job->gmode == TEC_GMODE_HEX_AND ? "HEX_AND" : "HEX_OR");
+  // Set graphics mode 
+  // TODO: Add support for TOPIX compression and let user choose
+  tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
+  //tpcl_job->gmode = TEC_GMODE_HEX_AND;
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -577,33 +766,43 @@ tpcl_rstartjob_cb(
   }
   else
   {
-    // Allocate buffer for hex mode
-    tpcl_job->buffer = malloc(tpcl_job->width);  // TODO this is incorrect, is 0.1mm should be bytes (pixel * ...)
+    // Allocate buffer for hex or nibble modes
+    tpcl_job->buffer = malloc(options->header.cupsBytesPerLine);
 
     if (!tpcl_job->buffer)
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX mode");
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX / Nibble mode");
       return false;
     }
 
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "HEX mode buffer allocated: line=%d bytes", tpcl_job->width);
   }
 
-  // If label size changed, send label size command - TODO determine label size change
-  if (true)
-  {
-    snprintf(
-      command,
-      sizeof(command),
-      "{D%04d,%04d,%04d,%04d|}\n",
-      2030,                                              // label pitch
-      1030,                                              // label width
-      1990,                                              // label length
-      1070                                               // full width of label roll
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
-  }
+  // Calculate label dimensions from page size
+  // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 254 / 72
+  int print_width  = (int)(options->header.cupsPageSize[0] * 254.0 / 72.0);  // Effective print width (0.1mm)
+  int print_height = (int)(options->header.cupsPageSize[1] * 254.0 / 72.0);  // Effective print height (0.1mm)
+
+  // Add 5mm (50 tenths of mm) margins
+  int label_pitch = print_height + 50;  // Label pitch = print height + 5mm gap
+  int roll_width  = print_width + 50;   // Roll width  = print width + 5mm margin
+
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %dx%ddpi: width=%d dots, height=%d dots", options->header.HWResolution[0], options->header.HWResolution[1], (int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));
+  
+
+  // Send label size command
+  snprintf(
+    command,
+    sizeof(command),
+    "{D%04d,%04d,%04d,%04d|}\n",
+    label_pitch,                                         // label pitch
+    print_width,                                         // label width
+    print_height,                                        // label length
+    roll_width                                           // full width of label roll
+  );
+  papplDevicePuts(device, command);
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
   // Send feed adjustment command - TODO only send when necessary; current command format throws error; should be configurable via job options
   if (false)
@@ -638,7 +837,7 @@ tpcl_rstartjob_cb(
   }
  
   // If label size changed, send feed command - TODO determine label size change
-  if (true)
+  if (false)
   {
     snprintf(
       command,
@@ -658,6 +857,7 @@ tpcl_rstartjob_cb(
  *
  * Sends page initialization commands:
  *   1. {C|} -> Clear image buffer
+ *   5. (if not TOPIX compression) 
  */
 
 bool
@@ -679,21 +879,6 @@ tpcl_rstartpage_cb(
     return false;
   }
 
-  // Update job data
-  tpcl_job->page = page;
-
-  // Zero buffers in case of TOPIX compression TODO
-  if (false)
-  {
-    memset(tpcl_job->last_buffer, 0, tpcl_job->width); //TODO incorrect
-    memset(tpcl_job->comp_buffer, 0, 0xFFFF);          //TODO incorrect
-
-    tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
-    tpcl_job->comp_last_line = 0;
-
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers zeroed: line=%d bytes, comp=65535 bytes", tpcl_job->width);
-  }
-
   // Clear image buffer command
   snprintf(
     command,
@@ -703,6 +888,36 @@ tpcl_rstartpage_cb(
   papplDevicePuts(device, command);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: %s", command);
 
+  // Update job data TODO clean out
+  //tpcl_job->page = page;
+
+  if (tpcl_job->gmode == TEC_GMODE_TOPIX)
+  {
+  // Zero buffers in case of TOPIX compression TODO
+    memset(tpcl_job->last_buffer, 0, tpcl_job->width); //TODO incorrect
+    memset(tpcl_job->comp_buffer, 0, 0xFFFF);          //TODO incorrect
+
+    tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
+    tpcl_job->comp_last_line = 0;
+
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers zeroed: line=%d bytes, comp=65535 bytes", tpcl_job->width);
+  }
+  else
+  {
+    // For hex and nibble mode, send the SG command header
+    // Send SG command beginning: {SG;x_origin,y_origin,width_dots,height_dots,mode,
+    snprintf(
+      command,
+      sizeof(command),
+      "{SG;0000,0000,%04u,%04u,%d,",
+      options->header.cupsWidth,
+      options->header.cupsHeight,
+      tpcl_job->gmode
+    );
+    papplDevicePuts(device, command);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending graphic command header (width, height, mode): %s", command);
+
+  }
   return true;
 }
 
@@ -736,9 +951,9 @@ tpcl_rwriteline_cb(
   const unsigned char      *line
 )
 {
-  if (y < 4)
+  if (y == 0)
   {
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Starting line %u (logging this message for the first 3 lines only)", y);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Starting line %u (logging debug messages for the first and last 3 lines only)", y);
   }
 
   // Fetch the job driver data pointer
@@ -749,11 +964,150 @@ tpcl_rwriteline_cb(
     return false;
   }
 
-  // Copy line to buffer
-  memcpy(tpcl_job->buffer, line, tpcl_job->width);
-
-  if (tpcl_job->gmode == TEC_GMODE_TOPIX)
+  // For 8bit color depth (1 byte = 1 pixel, grayscale), dither and compact to 1bit depth
+  if (options->header.cupsBitsPerPixel == 8)
   {
+    if ((y < 3) | (y > (options->header.cupsHeight - 4)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Using 8 bit to 1 bit dithering for image output", y);
+    }
+
+    // Clear output buffer
+    memset(tpcl_job->buffer, 0, options->header.cupsBytesPerLine / 8);
+
+    // Dither and pack to 8 pixels per output byte, MSB-first. PAPPL auto-selects the appropriate dither array.
+    for (unsigned int x = 0; x < options->header.cupsBytesPerLine; x++)
+    {
+      // If pixel is above threshold, set bit to 1
+      if (line[x] >= options->dither[y & 15][x & 15])
+      {
+        tpcl_job->buffer[x / 8] |= (0x80 >> (x & 7));  // Set bit MSB-first
+      }
+    }
+  }
+  // For 1bit color depth (1 byte = 8 pixels, black and white), just copy to target buffer
+  else if (options->header.cupsBitsPerPixel == 1)
+  {
+    if ((y < 3) | (y > (options->header.cupsHeight - 4)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Using native 1 bit color depth for image output", y);
+    }
+
+    // Move data to target buffer
+    memcpy(tpcl_job->buffer, line, options->header.cupsBytesPerLine);
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Only 1 bit or 8 bit color depths are supported, request was for %u bit", y, options->header.cupsBitsPerPixel);
+    return false;
+  }
+
+  // Determine if the print job is black ink plane (1 = black) or white ink plane (1 = white). Printer expects black ink plane (1 = black)
+  if (options->header.cupsColorSpace == CUPS_CSPACE_SW) // 1 = white -> invert all bits
+  {
+    if ((y < 3) | (y > (options->header.cupsHeight - 4)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Flipping bits to translate from white ink plane (1 = white) to black ink plane (1 = black)", y);
+    }
+
+    for (unsigned int x = 0; x < (options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel); x++)
+    {
+      tpcl_job->buffer[x] = (unsigned char)~tpcl_job->buffer[x];
+    }
+  } 
+  else if (options->header.cupsColorSpace != CUPS_CSPACE_K)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Only K(3) and SW(18) color spaces supported, request was for space (%u)", y, options->header.cupsColorSpace);
+    return false;
+  }
+
+  // Determine the transmission mode
+  if ((tpcl_job->gmode == TEC_GMODE_HEX_AND) | (tpcl_job->gmode == TEC_GMODE_HEX_OR))
+  {
+    if ((y < 3) | (y > (options->header.cupsHeight - 4)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in hex mode", y, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel);
+    }
+
+    papplDeviceWrite(device, tpcl_job->buffer, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel);
+  }
+  else if ((tpcl_job->gmode == TEC_GMODE_NIBBLE_AND) | (tpcl_job->gmode == TEC_GMODE_NIBBLE_OR))
+  {
+    // Mode to transmit data encoded as ASCII characters '0' (0x30, 0b0011 0000) to '?' (0x3F, 0b0011 1111)
+    // Split incoming buffer into high and low nibble, prefix 0b0011 high nibble for both bytes, and send
+
+    if ((y < 3) | (y > (options->header.cupsHeight - 4)))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in nibble mode (ASCII mode)", y, options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel * 2);
+    }
+
+    // Debug output: allocate buffer for ASCII representation (all lines)
+    char *debug_buffer = NULL;
+    if (papplSystemGetLogLevel(papplPrinterGetSystem(papplJobGetPrinter(job))) >= PAPPL_LOGLEVEL_DEBUG)
+    {
+      unsigned int line_chars = (options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel) * 2;
+      debug_buffer = malloc(line_chars + 1);
+      if (debug_buffer)
+      {
+        memset(debug_buffer, 0, line_chars + 1);
+      }
+    }
+
+    for (unsigned int x = 0; x < options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel; x++)
+    {
+      // Split into two ASCII bytes: 0x30 | nibble
+      unsigned char out[2] = {
+        (unsigned char)(0x30 | ((tpcl_job->buffer[x] >> 4) & 0x0F)), // high nibble to low nibble
+        (unsigned char)(0x30 | ( tpcl_job->buffer[x]       & 0x0F))  // low nibble to low nibble
+      };
+
+      // Store ASCII representation in debug buffer
+      if (debug_buffer)
+      {
+        debug_buffer[x * 2]     = (out[0] >= 0x30 && out[0] <= 0x3F) ? out[0] : '.';
+        debug_buffer[x * 2 + 1] = (out[1] >= 0x30 && out[1] <= 0x3F) ? out[1] : '.';
+      }
+
+      papplDeviceWrite(device, out, 2);
+    }
+
+    // Dump debug output to file and free buffer
+    if (debug_buffer)
+    {
+      char filename[256];
+      snprintf(filename, sizeof(filename), "/tmp/rastertotpcl-nibble-dump-%d.out", getpid());
+
+      FILE *fp = fopen(filename, "a");
+      if (fp)
+      {
+        // Write header for line 0
+        if (y == 0)
+        {
+          fprintf(fp, "### Job %d, Page %u ###\n", papplJobGetID(job), options->header.cupsInteger[0]);
+        }
+
+        fprintf(fp, "Line %u: %s\n", y, debug_buffer);
+        fclose(fp);
+
+        // Print info message at last line
+        if (y == options->header.cupsHeight - 1)
+        {
+          papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Dump file with image data written to %s", filename);
+        }
+      }
+      else
+      {
+        papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to open debug dump file: %s", filename);
+      }
+
+      free(debug_buffer);
+    }
+  }
+  else if (tpcl_job->gmode == TEC_GMODE_TOPIX)
+  {
+    // TODO TOPIX here
+  // Copy line to buffer
+  //memcpy(tpcl_job->buffer, line, tpcl_job->width);
     // Headers with TOPIX compression
 
 //[ESC] SG; 0100, 0240, 0019, 0300, 3, 00 5C 80 80 40 30
@@ -763,36 +1117,27 @@ tpcl_rwriteline_cb(
 //80 80 60 02 40 80 80 A0 0F 80 80 80 C0 30 C3 80 80 80 40
 //80 80 80 80 80 80 40 10 00 80 80 C0 80 20 80 80 C0 40 C0 [LF] [NUL]
 
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX mode header sent");
+    //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX mode header sent");
     // Compress using TOPIX algorithm
-    tpcl_topix_compress(tpcl_job, y);
+    //tpcl_topix_compress(tpcl_job, y);
 
     // Check if compression buffer is getting full, flush if needed
     // Buffer size is 0xFFFF, flush when less than (width + (width/8)*3) bytes remaining
-    size_t buffer_used = tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer;
-    size_t buffer_threshold = 0xFFFF - (tpcl_job->width + ((tpcl_job->width / 8) * 3));
+    //size_t buffer_used = tpcl_job->comp_buffer_ptr - tpcl_job->comp_buffer;
+    //size_t buffer_threshold = 0xFFFF - (tpcl_job->width + ((tpcl_job->width / 8) * 3));
 
-    if (buffer_used > buffer_threshold)
-    {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%zu bytes), flushing",
-                  y, buffer_used);
+    //if (buffer_used > buffer_threshold)
+    //{
+    //  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%zu bytes), flushing",
+    //              y, buffer_used);
       //tpcl_topix_output_buffer(device, tpcl_job, y);
-      memset(tpcl_job->last_buffer, 0, tpcl_job->width);
-    }
+    //  memset(tpcl_job->last_buffer, 0, tpcl_job->width);
+   // }
   }
   else
   {
-    // Headers for hex mode
-//    snprintf(command, sizeof(command),
-//             "{SG;0000,0000,%04d,%04d,%d,",
-//             tpcl_job->width * 8, tpcl_job->height, tpcl_job->gmode);
-//    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending HEX mode graphics header: %s", command);
-//    papplDevicePuts(device, command);
-
-    papplDevicePuts(device, "{SG;0100,0240,0019,0022,0,003000003800003<00003>000037000033800031<00030<00030>00030600030>00030<00031<00033800?33003??0007??000???000??>000??>0007?<0003?0000|}\n");
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "HEX mode header sent");
-    // HEX mode: Output raw binary data directly
-    //papplDeviceWrite(device, tpcl_job->buffer, tpcl_job->width);
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line %u: Data transmission mode %u not supported", y, tpcl_job->gmode);
+    return false;
   }
 
   return true;
@@ -816,6 +1161,7 @@ tpcl_rendpage_cb(
   unsigned                 page
 )
 {
+//  return true;
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Ending page %u", page);
   char command[256];
   static unsigned char dummy_data[600] = {0};  // 600 null bytes for BEV4T workaround
@@ -836,8 +1182,9 @@ tpcl_rendpage_cb(
   }
   else
   {
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Closing HEX graphics data");
-    //papplDevicePuts(device, "|}\n");
+    // Close HEX mode SG command
+    papplDevicePuts(device, "|}\n");
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Closing HEX graphics data with: |}}");
   }
 
   // Print the label
@@ -870,12 +1217,12 @@ tpcl_rendpage_cb(
   //papplDevicePuts(device, command);
 
   // Send padding to avoid TCP zero-window error (workaround)
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround)");
-  papplDevicePrintf(device, "%1024s", "");
+  //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround)");
+  //papplDevicePrintf(device, "%1024s", "");
 
   // Send 600 null bytes dummy data (BEV4T last packet lost bug workaround)
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 600 null bytes (BEV4T workaround)");
-  papplDeviceWrite(device, dummy_data, sizeof(dummy_data));
+  //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 600 null bytes (BEV4T workaround)");
+  //papplDeviceWrite(device, dummy_data, sizeof(dummy_data));
 
   papplDeviceFlush(device);
 
@@ -896,6 +1243,7 @@ tpcl_rendjob_cb(
   pappl_device_t           *device
 )
 {
+  return true;
   papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Ending TPCL print job");
 
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);

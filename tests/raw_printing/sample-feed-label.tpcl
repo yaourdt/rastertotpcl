@@ -1,0 +1,34 @@
+# Sample TPCL file to set label size and feed one label
+#
+# Usage with IPP:
+# ipptool -tv -f sample-feed-label.tpcl ipp://localhost:8000/ipp/print/TestPrinter print-job.test
+#
+# Label dimensions:
+# - Label length: 199mm (effective print height)
+# - Label width: 103mm (effective print width)
+# - Gap between labels: 5mm (added to pitch)
+# - Side margins: 2.5mm on each side (5mm total added to roll width)
+#
+# TPCL {D} command format: {Daaaa,bbbb,cccc,dddd|}
+#   aaaa = Pitch length (label height + gap) in 0.1mm units
+#   bbbb = Effective print width in 0.1mm units
+#   cccc = Effective print height in 0.1mm units
+#   dddd = Full roll width in 0.1mm units
+#
+# Calculations:
+#   Pitch = 199mm + 5mm = 204mm = 2040 (in 0.1mm)
+#   Print width = 103mm = 1030 (in 0.1mm)
+#   Print height = 199mm = 1990 (in 0.1mm)
+#   Roll width = 103mm + 5mm = 108mm = 1080 (in 0.1mm)
+
+# Set label size
+{D2040,1030,1990,1080|}
+
+# Feed one label
+# {T} command format: {Tabcde|}
+#   a = Sensor type (2=transmissive for normal labels)
+#   b = Cut (0=non-cut)
+#   c = Feed mode (C=batch/tear-off)
+#   d = Feed speed (3=3 inches/sec)
+#   e = Ribbon (0=direct thermal, 1=thermal transfer)
+{T20C30|}

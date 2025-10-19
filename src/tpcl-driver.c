@@ -742,8 +742,9 @@ tpcl_rstartjob_cb(
 
   // Set graphics mode 
   // TODO: Add support for TOPIX compression and let user choose
-  tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
-  //tpcl_job->gmode = TEC_GMODE_HEX_AND;
+  //tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
+  tpcl_job->gmode = TEC_GMODE_HEX_AND;
+  //tpcl_job->gmode = TEC_GMODE_TOPIX;
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -790,7 +791,6 @@ tpcl_rstartjob_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %dx%ddpi: width=%d dots, height=%d dots", options->header.HWResolution[0], options->header.HWResolution[1], (int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));
   
-
   // Send label size command
   snprintf(
     command,

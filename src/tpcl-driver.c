@@ -41,19 +41,62 @@
 
 /*
  * Driver information array
+ * Name, description, IEEE-1284 device ID, extension
  */
 
 const pappl_pr_driver_t tpcl_drivers[] = {
-  {
-    "toshiba-tec-tpcl",                                  // Name
-    "Toshiba TEC TPCL v2 Label Printer",                 // Description
-    "MFG:Toshiba Tec;MDL:TPCL;CMD:TPCL;",                // IEEE-1284 device ID
-    NULL                                                 // Extension
-  }
+  {"B-SA4G",      "Tec B-SA4G",      "CMD:TPCL",             NULL},
+  {"B-SA4T",      "Tec B-SA4T",      "CMD:TPCL",             NULL},
+  {"B-SX4",       "Tec B-SX4",       "CMD:TPCL",             NULL},
+  {"B-SX5",       "Tec B-SX5",       "CMD:TPCL",             NULL},
+  {"B-SX6",       "Tec B-SX6",       "CMD:TPCL",             NULL},
+  {"B-SX8",       "Tec B-SX8",       "CMD:TPCL",             NULL},
+  {"B-482",       "Tec B-482",       "CMD:TPCL",             NULL},
+  {"B-572",       "Tec B-572",       "CMD:TPCL",             NULL},
+  {"B-852R",      "Tec B-852R",      "CMD:TPCL",             NULL},
+  {"B-SV4D",      "Tec B-SV4D",      "CMD:TPCL",             NULL},
+  {"B-SV4T",      "Tec B-SV4T",      "CMD:TPCL",             NULL},
+  {"B-EV4D-GS14", "Tec B-EV4D-GS14", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4T-GS14", "Tec B-EV4T-GS14", "CMD:TPCL;MDL:B-EV4-G", NULL}
 };
 
 const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
 
+
+/*
+ * Printer information array, extends information from 'tpcl_drivers[]'
+ */
+
+#define TPCL_PRNT_SPEED 4
+
+typedef struct {
+    const char             *name;                        // Name, must be equal to name in 'tpcl_drivers[]'
+    int                    print_min_width;              // Minimum label width in x direction in points (1 point = 1/72 inch)
+    int                    print_min_height;             // Minimum label length in y direction in points
+    int                    print_max_width;              // Maximum label width in x direction in points
+    int                    print_max_height;             // Maximum label length in y direction in points
+    bool                   resolution_203;               // Printer offers 203 dpi resolution if true
+    bool                   resolution_300;               // Printer offers 300 dpi resolution if true
+    bool                   thermal_transfer;             // Direct thermal media are alyways supported, if true also thermal transfer media are allowed
+    bool                   thermal_transfer_with_ribbon; // Thermal transfer with ribbon support if true
+    int                    print_speeds[TPCL_PRNT_SPEED];// Print speed settings as Toshiba enum, position 0 is default
+} tpcl_printer_t;
+
+const tpcl_printer_t tpcl_printer_properties[] = {
+  {"B-SA4G",        63,   29,  300, 2830, true,  false, true,  false, {0x4, 0x2, 0x6, 0x0}},
+  {"B-SA4T",        63,   29,  300, 2830, false, true , true,  false, {0x4, 0x2, 0x6, 0x0}},
+  {"B-SX4",         72,   23,  295, 4246, true,  false, true,  true,  {0x6, 0x3, 0xA, 0x0}},
+  {"B-SX5",         73,   29,  362, 4246, true,  true , true,  true,  {0x5, 0x3, 0x8, 0x0}},
+  {"B-SX6",        238,   29,  483, 4246, true,  true , true,  true,  {0x4, 0x3, 0x8, 0x0}},
+  {"B-SX8",        286,   29,  605, 4246, true,  true , true,  true,  {0x4, 0x3, 0x8, 0x0}},
+  {"B-482",         72,   23,  295, 4246, true,  true , true,  true,  {0x5, 0x3, 0x4, 0x8}},
+  {"B-572",         73,   29,  362, 4246, true,  true , true,  true,  {0x5, 0x3, 0x8, 0x0}},
+  {"B-852R",       283,   35,  614, 1814, false, true , false, false, {0x4, 0x2, 0x8, 0x0}},
+  {"B-SV4D",        71,   23,  306, 1726, true,  false, false, false, {0x3, 0x2, 0x4, 0x5}},
+  {"B-SV4T",        71,   23,  306, 1726, true,  false, true,  false, {0x3, 0x2, 0x4, 0x5}},
+  {"B-EV4D-GS14",   71,   23,  306, 1726, true,  true , false, false, {0x3, 0x2, 0x4, 0x5}},
+  {"B-EV4T-GS14",   71,   23,  306, 1726, true,  true , true,  false, {0x3, 0x2, 0x4, 0x5}}
+};
 
 /*
  * Job data structure
@@ -63,8 +106,8 @@ typedef struct {
   int                      gmode;                        // Graphics mode (TOPIX, hex, nibble)
   int                      print_width;                  // Effective print width (0.1mm)
   int                      print_height;                 // Effective print height (0.1mm)
-  int                      label_pitch;                  // Label pitch = print height + 5mm gap
-  int                      roll_width;                   // Roll width  = print width + 5mm margin
+  int                      label_pitch;                  // Label pitch = print height + label gap
+  int                      roll_width;                   // Roll width
   unsigned int             buffer_len;                   // Length of line buffer as sent to printer
   unsigned char            *buffer;                      // Current line buffer
   unsigned char            *last_buffer;                 // Previous line buffer (for TOPIX)
@@ -206,8 +249,8 @@ tpcl_driver_cb(
   driver_data->delete_cb     = tpcl_delete_cb;           // Printer deletion callback
 
   // Model-agnostic printer options
-  dither_threshold16(driver_data->gdither, 128);         // dithering for 'auto', 'text', and 'graphic' TODO let user choose cutoff
-  dither_bayer16(driver_data->pdither);                  // dithering for 'photo'
+  dither_threshold16(driver_data->gdither, 128);         // Dithering for 'auto', 'text', and 'graphic' TODO let user choose cutoff and algo
+  dither_bayer16(driver_data->pdither);                  // Dithering for 'photo' TODO let user choose algo
   driver_data->format = "application/vnd.toshiba-tpcl";  // Native file format
   driver_data->ppm = 10;                                 // Pages per minute (guesstimate)
   driver_data->ppm_color = 0;                            // No color printing
@@ -525,8 +568,8 @@ void tpcl_identify_cb(
   print_height = driver_data.media_default.size_length / 10;  // Effective print height
 
   // Add 5mm (50 tenths of mm) to each dimension for label pitch and roll width - TODO implement as user setting
-  label_pitch = print_height + 50;  // Label pitch = print height + 5mm gap
-  roll_width  = print_width + 50;   // Roll width = print width + 5mm margin
+  label_pitch = print_height + 50;  // Label pitch = print height + label gap TODO
+  roll_width  = print_width + 50;   // Roll width TODO
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
 
@@ -815,8 +858,8 @@ tpcl_rstartjob_cb(
   tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * 254.0 / 72.0);  // Effective print height (0.1mm)
 
   // Add 5mm (50 tenths of mm) margins TODO let user set this
-  tpcl_job->label_pitch = tpcl_job->print_height + 50;  // Label pitch = print height + 5mm gap
-  tpcl_job->roll_width  = tpcl_job->print_width + 50;   // Roll width  = print width + 5mm margin
+  tpcl_job->label_pitch = tpcl_job->print_height + 50;  // Label pitch = print height + label gap TODO
+  tpcl_job->roll_width  = tpcl_job->print_width + 50;   // Roll width TODO
 
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));

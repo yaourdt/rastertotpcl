@@ -391,7 +391,7 @@ tpcl_status_cb(
   }
   else if (bytes == 0)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Timeout waiting for status response (%ds)", poll_attempts);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Timeout waiting for status response (%dms)", poll_attempts);
     papplPrinterCloseDevice(printer);
     return printer_ready;
   }
@@ -416,7 +416,7 @@ tpcl_status_cb(
     status_code[0] = status[2];
     status_code[1] = status[3];
     status_code[2] = '\0';
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status response: '%s' after %ds", status_code, poll_attempts);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Status response: '%s' after %dms", status_code, poll_attempts);
 
     // Check status code against documented values: "00"=ready, "02"=operating, "40"=print succeeded, "41"=feed succeeded
     if (strcmp(status_code, "00") == 0 || strcmp(status_code, "02") == 0 ||
@@ -665,7 +665,7 @@ tpcl_print_cb(
     }
     else
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line too long (exceeds %lu bytes), truncating", sizeof(line));
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line too long (exceeds %lu bytes)", sizeof(line));
       line[sizeof(line) - 1] = '\0';
       close(fd);
       return false;
@@ -789,8 +789,8 @@ tpcl_rstartjob_cb(
 
     if (!tpcl_job->buffer || !tpcl_job->last_buffer || !tpcl_job->comp_buffer)
     {
-      tpcl_free_job_buffers(job, tpcl_job);
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate TOPIX compression buffers");
+      tpcl_free_job_buffers(job, tpcl_job);
       return false;
     }
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers allocated: line=%u bytes, comp=65535 bytes", options->header.cupsBytesPerLine);
@@ -802,8 +802,8 @@ tpcl_rstartjob_cb(
 
     if (!tpcl_job->buffer)
     {
-      tpcl_free_job_buffers(job, tpcl_job);
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX / Nibble mode");
+      tpcl_free_job_buffers(job, tpcl_job);
       return false;
     }
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "HEX mode buffer allocated: line=%u bytes", options->header.cupsBytesPerLine);

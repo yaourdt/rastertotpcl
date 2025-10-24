@@ -12,7 +12,6 @@
  * Licensed under GNU GPL v3.
  */
 
-#include <pappl/pappl.h>
 #include "tpcl-driver.h"
 
 

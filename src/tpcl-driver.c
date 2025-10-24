@@ -21,14 +21,9 @@
 // TODO: Clean out printer properties in tpcl_driver_cb
 // TODO: Document, that this driver assumes, all pages in a job are of the same size
 // TODO: Implement printer autodetection
-// in den rasterdruck callbacks korrektes free wenn wegen fehler unterwegs abgebrochen wird
-// TODO checken ob die includes alle noch nötig sind
 // TODO set IPP attributes
 // TODO test identify action
 
-#include <string.h>
-#include <math.h>
-#include <unistd.h>
 #include "tpcl-driver.h"
 #include "dithering.h"
 

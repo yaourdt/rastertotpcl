@@ -19,14 +19,23 @@
 // TODO: Implement testpage callback
 // TODO: Implement delete printer callback
 // TODO: Clean out printer properties in tpcl_driver_cb
-// TODO: Document, that this driver assumes, all pages in a job are of the same size
-// TODO: Implement printer autodetection
 // TODO set IPP attributes
-// TODO test identify action
+// TODO POINTS_PER_INCH, MM_PER_INCH in all source
+// TODO report supplies from status message
+// TODO printer icons
+// Todo choose dithering algo
+// TODO menschenlesbare namen für label-gap etc
 
 #include "tpcl-driver.h"
 #include "dithering.h"
+#include <math.h>
 
+/*
+ * Constants for conversion
+ */
+
+#define POINTS_PER_INCH 72.0
+#define MM_PER_INCH     25.4
 
 /*
  * TPCL Graphics Modes
@@ -67,7 +76,7 @@ const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
  * Printer information array, extends information from 'tpcl_drivers[]'
  */
 
-#define TPCL_PRNT_SPEED 4
+#define TPCL_PRNT_SPEED 3
 
 typedef struct {
     const char             *name;                        // Name, must be equal to name in 'tpcl_drivers[]'
@@ -79,23 +88,23 @@ typedef struct {
     bool                   resolution_300;               // Printer offers 300 dpi resolution if true
     bool                   thermal_transfer;             // Direct thermal media are alyways supported, if true also thermal transfer media are allowed
     bool                   thermal_transfer_with_ribbon; // Thermal transfer with ribbon support if true
-    int                    print_speeds[TPCL_PRNT_SPEED];// Print speed settings as Toshiba enum, position 0 is default
+    int                    print_speeds[TPCL_PRNT_SPEED];// Print speed settings as Toshiba enum (min, default, max)
 } tpcl_printer_t;
 
 const tpcl_printer_t tpcl_printer_properties[] = {
-  {"B-SA4G",        63,   29,  300, 2830, true,  false, true,  false, {0x4, 0x2, 0x6, 0x0}},
-  {"B-SA4T",        63,   29,  300, 2830, false, true , true,  false, {0x4, 0x2, 0x6, 0x0}},
-  {"B-SX4",         72,   23,  295, 4246, true,  false, true,  true,  {0x6, 0x3, 0xA, 0x0}},
-  {"B-SX5",         73,   29,  362, 4246, true,  true , true,  true,  {0x5, 0x3, 0x8, 0x0}},
-  {"B-SX6",        238,   29,  483, 4246, true,  true , true,  true,  {0x4, 0x3, 0x8, 0x0}},
-  {"B-SX8",        286,   29,  605, 4246, true,  true , true,  true,  {0x4, 0x3, 0x8, 0x0}},
-  {"B-482",         72,   23,  295, 4246, true,  true , true,  true,  {0x5, 0x3, 0x4, 0x8}},
-  {"B-572",         73,   29,  362, 4246, true,  true , true,  true,  {0x5, 0x3, 0x8, 0x0}},
-  {"B-852R",       283,   35,  614, 1814, false, true , false, false, {0x4, 0x2, 0x8, 0x0}},
-  {"B-SV4D",        71,   23,  306, 1726, true,  false, false, false, {0x3, 0x2, 0x4, 0x5}},
-  {"B-SV4T",        71,   23,  306, 1726, true,  false, true,  false, {0x3, 0x2, 0x4, 0x5}},
-  {"B-EV4D-GS14",   71,   23,  306, 1726, true,  true , false, false, {0x3, 0x2, 0x4, 0x5}},
-  {"B-EV4T-GS14",   71,   23,  306, 1726, true,  true , true,  false, {0x3, 0x2, 0x4, 0x5}}
+  {"B-SA4G",        63,   29,  300, 2830, true,  false, true,  false, {0x2, 0x4, 0x6}},
+  {"B-SA4T",        63,   29,  300, 2830, false, true , true,  false, {0x2, 0x4, 0x6}},
+  {"B-SX4",         72,   23,  295, 4246, true,  false, false, true,  {0x3, 0x6, 0xA}},
+  {"B-SX5",         73,   29,  362, 4246, true,  true , false, true,  {0x3, 0x5, 0x8}},
+  {"B-SX6",        238,   29,  483, 4246, true,  true , false, true,  {0x3, 0x4, 0x8}},
+  {"B-SX8",        286,   29,  605, 4246, true,  true , false, true,  {0x3, 0x4, 0x8}},
+  {"B-482",         72,   23,  295, 4246, true,  true , false, true,  {0x3, 0x5, 0x8}},
+  {"B-572",         73,   29,  362, 4246, true,  true , false, true,  {0x3, 0x5, 0x8}},
+  {"B-852R",       283,   35,  614, 1814, false, true , false, false, {0x2, 0x4, 0x8}},
+  {"B-SV4D",        71,   23,  306, 1726, true,  false, false, false, {0x2, 0x3, 0x5}},
+  {"B-SV4T",        71,   23,  306, 1726, true,  false, true,  false, {0x2, 0x3, 0x5}},
+  {"B-EV4D-GS14",   71,   23,  306, 1726, true,  true , false, false, {0x2, 0x3, 0x5}},
+  {"B-EV4T-GS14",   71,   23,  306, 1726, true,  true , true,  false, {0x2, 0x3, 0x5}}
 };
 
 /*
@@ -233,9 +242,6 @@ tpcl_driver_cb(
 {
   (void)data;
 
-  // Costom driver extensions
-  //driver_data->extension;                              // Extension data
-
   // Set callbacks
   driver_data->status_cb     = tpcl_status_cb;           // Printer status callback
   driver_data->identify_cb   = tpcl_identify_cb;         // Identify-Printer callback (feed one blank label)
@@ -255,125 +261,190 @@ tpcl_driver_cb(
   driver_data->ppm = 10;                                 // Pages per minute (guesstimate)
   driver_data->ppm_color = 0;                            // No color printing
   //pappl_icon_t icons[3];                               // "printer-icons" values. TODO: Implement
-  driver_data->kind = PAPPL_KIND_LABEL;		            	 // "printer-kind" values
-  driver_data->has_supplies = false;                     // Printer can report supplies. TODO: Implement
+  driver_data->kind = PAPPL_KIND_LABEL;		            	 // Type of printer
+  driver_data->has_supplies = false;                     // Printer can report supplies.
   driver_data->input_face_up = true;		                 // Does input media come in face-up?
   driver_data->output_face_up = true;		                 // Does output media come out face-up?
-  driver_data->orient_default = IPP_ORIENT_NONE;         // "orientation-requested-default" value
+  driver_data->orient_default = IPP_ORIENT_NONE;         // Default orientation
   driver_data->color_supported =                         // Highest supported color mode advertised via IPP
     PAPPL_COLOR_MODE_BI_LEVEL  |                         //  - black & white
     PAPPL_COLOR_MODE_MONOCHROME;                         //  - grayscale
   driver_data->color_default =                           // Default color mode 
-    PAPPL_COLOR_MODE_BI_LEVEL;
+    PAPPL_COLOR_MODE_BI_LEVEL;                           //  - black & white
   driver_data->content_default = PAPPL_CONTENT_AUTO;     // Optimize for vector graphics or image content
-  driver_data->quality_default = IPP_QUALITY_NORMAL;     // "print-quality-default" value
-  driver_data->scaling_default = PAPPL_SCALING_AUTO;     // "print-scaling-default" value
+  driver_data->quality_default = IPP_QUALITY_NORMAL;     // Default print quality
+  driver_data->scaling_default = PAPPL_SCALING_AUTO;     // Default print scaling
   driver_data->raster_types =                            // Supported color schemes by our driver callback
-    PAPPL_PWG_RASTER_TYPE_BLACK_1 |                      // - black & white 1 bit
-    PAPPL_PWG_RASTER_TYPE_BLACK_8 |                      // - black & white 8 bit
-    PAPPL_PWG_RASTER_TYPE_SGRAY_8;                       // - grayscale 8 bit
-  driver_data->force_raster_type = PAPPL_PWG_RASTER_TYPE_NONE;   // Force a particular raster type?
+    PAPPL_PWG_RASTER_TYPE_BLACK_1 |                      // - black & white
+    PAPPL_PWG_RASTER_TYPE_BLACK_8 |                      // - grayscale, 0xFF = black
+    PAPPL_PWG_RASTER_TYPE_SGRAY_8;                       // - grayscale, 0xFF = white
+  driver_data->force_raster_type =                       // Force a particular raster type? 
+    PAPPL_PWG_RASTER_TYPE_NONE;
   driver_data->duplex = PAPPL_DUPLEX_NONE;               // Duplex printing modes supported
-  driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED;  // "sides-supported" values
-  driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;    // "sides-default" value
-  driver_data->borderless = true;                        // Borderless margins supported?
-  driver_data->left_right = 0;                           // Left and right margins in hundredths of millimeters
-  driver_data->bottom_top = 0;                           // Bottom and top margins in hundredths of millimeters	
+  driver_data->sides_supported = PAPPL_SIDES_ONE_SIDED;  // IPP "sides" bit values
+  driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;    // IPP "sides" bit values for default
+  driver_data->finishings = PAPPL_FINISHINGS_NONE;       // Supported finishings such as punch or staple
+  driver_data->num_bin = 0;                              // Number of output bins
+
+  driver_data->identify_supported =                      // Supported identify actions (we actually feed a blank label)
+    PAPPL_IDENTIFY_ACTIONS_SOUND;
+  driver_data->identify_default =                        // Default identification action (we actually feed a blank label)
+    PAPPL_IDENTIFY_ACTIONS_SOUND;
+
+  // Define Toshiba TEC specific vendor options (max 32 allowed by PAPPL)
+  driver_data->num_vendor = 0;                           // Number of available vendor options
+  if (!*driver_attrs) *driver_attrs = ippNew();          // Create IPP attributes to describe above vendor options
+
+  // Gap beween labels in units of 0.1mm
+  driver_data->vendor[driver_data->num_vendor] = "label-gap";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 10, 500);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
+  driver_data->num_vendor++;
+
+  // Roll margin in units of 0.1mm (difference between backing paper and label)
+  driver_data->vendor[driver_data->num_vendor] = "roll-margin";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported", 10, 500);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  ,  5     );
+  driver_data->num_vendor++;
+
+  //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
+  //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
 
   // Model-specific printer options
-  if (true) {                                            // TODO actually determine the printer
-    strncpy(driver_data->make_and_model, "Toshiba TEC TPCL v2 Label Printer", // TODO use more specific name for each printer
-      sizeof(driver_data->make_and_model) - 1);
-    driver_data->make_and_model[sizeof(driver_data->make_and_model) - 1] = '\0';
-    driver_data->finishings = PAPPL_FINISHINGS_NONE;     // "finishings-supported" values
+  for (int i = 0; i < tpcl_drivers_count; i++)
+  {
+    if (!strcmp(driver_name, tpcl_drivers[i].name))
+    {
+      int x_mm, y_mm;
+      char roll_min[PAPPL_MAX_MEDIA], roll_max[PAPPL_MAX_MEDIA];
+      
+      // Device name
+      strncpy(driver_data->make_and_model, tpcl_drivers[i].description, 127);
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Driver '%s' loaded from table position %d", tpcl_drivers[i].name, i);
 
-    // Supported resolutions (203dpi = 8 dots/mm, 300dpi = 12 dots/mm, 600dpi = 24 dots/mm)
-    driver_data->num_resolution = 2;                     // Number of printer resolutions
-    driver_data->x_resolution[0] = 203;                  // Horizontal printer resolutions
-    driver_data->x_resolution[1] = 300;
-    driver_data->y_resolution[0] = 203;                  // Vertical printer resolutions
-    driver_data->y_resolution[1] = 300;
-    driver_data->x_default = 203;                        // Default horizontal resolution
-    driver_data->y_default = 203;                        // Default vertical resolution
+      // Available printer resolutions
+      driver_data->num_resolution = 0;                   // Number of printer resolutions
+      if (tpcl_printer_properties[i].resolution_203)
+      {
+        driver_data->x_resolution[0] = 203;              // Horizontal printer resolutions
+        driver_data->y_resolution[0] = 203;              // Vertical printer resolutions
+        driver_data->x_default = 203;                    // Default horizontal resolution
+        driver_data->y_default = 203;                    // Default vertical resolution
+        driver_data->num_resolution++;
+      }
+      if (tpcl_printer_properties[i].resolution_300)
+      {
+        driver_data->x_resolution[driver_data->num_resolution] = 300;
+        driver_data->y_resolution[driver_data->num_resolution] = 300;
+        driver_data->x_default = 300;
+        driver_data->y_default = 300;
+        driver_data->num_resolution++;
+      }
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Resolution settings: num_resolution=%d, x_default=%d, y_default=%d", driver_data->num_resolution, driver_data->x_default, driver_data->y_default);
+      if (driver_data->num_resolution == 0)
+      {
+        papplLog(system, PAPPL_LOGLEVEL_ERROR, "No resolution configured for driver '%s'", driver_name);
+        return false;
+      }
+      
+      // Available printing speeds
+      driver_data->speed_supported[0] = tpcl_printer_properties[i].print_speeds[0]; // Min
+      driver_data->speed_default      = tpcl_printer_properties[i].print_speeds[1]; // Default
+      driver_data->speed_supported[1] = tpcl_printer_properties[i].print_speeds[2]; // Max
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Print speed settings: min=%d, default=%d, max=%d", driver_data->speed_supported[0], driver_data->speed_default, driver_data->speed_supported[1]); 
 
-    // Common label sizes - using standard PWG media names - TODO clean and move to roll definitions, which currently does not work as PAPPL rejects the print job
-    // Use roll media for label printers - allows any size within range
-    // Range: 6x6mm (min) to 203x330mm (max)
-    //driver_data->num_media = 2;
-    //driver_data->media[0] = "roll_min_6x6mm";
-    //driver_data->media[1] = "roll_max_203x330mm";
-    //WORKAROUND We define a selection of common sizes instead of roll_min/roll_max
-    // due to validation in PAPPL 1.4.9
+      // Supported media (label) sizes. We use roll media for label printers, which allows any size within range
+      driver_data->num_media = 2;                        // Number of supported media
 
-    // Supported media
-    // Use roll media range for label printers - allows any size within range
-    int media_idx = 0; // TODO this could lead to an overflow as it ignores PAPPL_MAX_MEDIA
-    driver_data->media[media_idx++] = "roll_min_6x6mm";  // Minimum label size
-    driver_data->media[media_idx++] = "roll_max_203x330mm";// Maximum label size (8" x 13")
-    driver_data->num_media = media_idx;                  // Number of supported media
+      // Minimum label size
+      x_mm = (int)ceil ( (tpcl_printer_properties[i].print_min_width  / POINTS_PER_INCH) * MM_PER_INCH );
+      y_mm = (int)ceil ( (tpcl_printer_properties[i].print_min_height / POINTS_PER_INCH) * MM_PER_INCH );
+      snprintf(roll_min, PAPPL_MAX_MEDIA, "roll_min_%dx%dmm", x_mm, y_mm);
+      driver_data->media[0] = strdup(roll_min);
+
+      // Maximum label size
+      x_mm = (int)floor( (tpcl_printer_properties[i].print_max_width  / POINTS_PER_INCH) * MM_PER_INCH );
+      y_mm = (int)floor( (tpcl_printer_properties[i].print_max_height / POINTS_PER_INCH) * MM_PER_INCH );
+      snprintf(roll_max, PAPPL_MAX_MEDIA, "roll_max_%dx%dmm", x_mm, y_mm);
+      driver_data->media[1] = strdup(roll_max);
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Roll media dimensions: min=%s, max=%s", driver_data->media[0], driver_data->media[1]);
 
     // Available media sources
-    media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_SOURCE
-    driver_data->source[media_idx++] = "main-roll";  // Media sources
-	  driver_data->num_source = media_idx;             // Number of media sources (trays/rolls)
+	    driver_data->num_source = 1;                       // Number of media sources (trays/rolls)
+      driver_data->source[0] = "main-roll";              // Media sources
+      papplCopyString(driver_data->media_ready[0].source, driver_data->source[0], 63);
 
     // Available media types
-    media_idx = 0;  // TODO this could lead to an overflow as it ignores PAPPL_MAX_TYPE
-    driver_data->type[media_idx++] = "labels";                 // Media types
-    driver_data->type[media_idx++] = "labels-continuous";
-    driver_data->type[media_idx++] = "direct-thermal";
-    driver_data->num_type = media_idx;               // Number of media types
+      driver_data->num_type = 1;                         // Number of media types
+      driver_data->type[0] = "direct-thermal";           // Media types
+      papplCopyString(driver_data->media_ready[0].type,   driver_data->type[0],   63);
 
-    // Fill out ready media TODO replace by function that reads available media sizes from a definition file
-    for (int i = 0; i < driver_data->num_source; i ++)
-    {
-      driver_data->media_ready[i].bottom_margin = driver_data->bottom_top; // Bottom margin in hundredths of millimeters
-      driver_data->media_ready[i].left_margin   = driver_data->left_right; // Left margin in hundredths of millimeters
-      driver_data->media_ready[i].left_offset   = 0;                       // Left offset in hundredths of millimeters
-      driver_data->media_ready[i].right_margin  = driver_data->left_right; // Right margin in hundredths of millimeters
+      if (tpcl_printer_properties[i].thermal_transfer)
+      {
+        driver_data->type[driver_data->num_type] = "thermal-transfer";
+        driver_data->num_type++;
+      }
 
-      // TODO all of the following should not be hard coded
-      driver_data->media_ready[i].size_width    = 10300;                   // Width in hundredths of millimeters
-      driver_data->media_ready[i].size_length   = 19900;                   // Height in hundredths of millimeters
-      papplCopyString(driver_data->media_ready[i].size_name, "na_4x8_4x8in", sizeof(driver_data->media_ready[i].size_name)); // Use closest standard PWG media name
+      if (tpcl_printer_properties[i].thermal_transfer_with_ribbon)
+      {
+        driver_data->type[driver_data->num_type] = "thermal-transfer-ribbon-saving";
+        driver_data->num_type++;
+        driver_data->type[driver_data->num_type] = "thermal-transfer-no-ribbon-saving";
+        driver_data->num_type++;
+      }
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Media type settings: num_type=%d, thermal_transfer=%d, thermal_transfer_with_ribbon=%d", driver_data->num_type, tpcl_printer_properties[i].thermal_transfer, tpcl_printer_properties[i].thermal_transfer_with_ribbon);
 
-      papplCopyString(driver_data->media_ready[i].source, driver_data->source[i], sizeof(driver_data->media_ready[i].source)); // PWG media source name
-      driver_data->media_ready[i].top_margin    = driver_data->bottom_top; // Top margin in hundredths of millimeters
-      driver_data->media_ready[i].top_offset    = 0;                       // Top offset in hundredths of millimeters
-      driver_data->media_ready[i].tracking      = 0;                       // IPP media tracking type, we have no tracking
+      // Fill out ready media, by default we are not setting margins
+      driver_data->borderless                   =  true; // Borderless margins supported?
+      driver_data->left_right                   =     0; // Left and right margins in hundredths of millimeters
+      driver_data->bottom_top                   =     0; // Bottom and top margins in hundredths of millimeters	
+      driver_data->media_ready[0].top_margin    =     0; // Top margin in hundredths of millimeters
+      driver_data->media_ready[0].bottom_margin =     0; // Bottom margin in hundredths of millimeters
+      driver_data->media_ready[0].left_margin   =     0; // Left margin in hundredths of millimeters
+      driver_data->media_ready[0].right_margin  =     0; // Right margin in hundredths of millimeters
 
-      papplCopyString(driver_data->media_ready[i].type, driver_data->type[0],  sizeof(driver_data->media_ready[i].type)); // PWG media type name
+      // Fill out ready media, we assume a default label of size 80x200mm to be loaded
+      driver_data->media_ready[0].tracking      =     0; // IPP media tracking type, we have no tracking
+      driver_data->media_ready[0].size_width    =  8000; // Width in hundredths of millimeters
+      driver_data->media_ready[0].size_length   = 20000; // Height in hundredths of millimeters
+      papplCopyString(driver_data->media_ready[0].size_name, "oe_toshiba_80x200mm", 63);
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Media ready settings: size_name=%s, width=%d (0.01mm), length=%d (0.01mm)", driver_data->media_ready[0].size_name, driver_data->media_ready[0].size_width, driver_data->media_ready[0].size_length); 
+
+      // Fill out ready media, by default there are no offsets
+      driver_data->left_offset_supported[0]     =     0; // Minimum left printing offset supported
+      driver_data->left_offset_supported[1]     =     0; // Maximum left printing offset supported
+      driver_data->media_ready[0].left_offset   =     0; // Default left offset in hundredths of millimeters
+      driver_data->top_offset_supported[0]      = -5000; // Minimum top printing offset supported
+      driver_data->top_offset_supported[1]      =  5000; // Maximum top printing offset supported
+      driver_data->media_ready[0].top_offset    =     0; // Default top offset in hundredths of millimeters
+
+      // Printer darkness
+      driver_data->darkness_supported           =    21; // Printer darkness (Toshiba -10 ... 10 -> 21 values)
+      driver_data->darkness_default             =    11; // Default darkness adjustment at printer power-on
+      driver_data->darkness_configured          =    11; // Currently configured printing darkness
+
+      // Default media
+      driver_data->media_default = driver_data->media_ready[0];
+      break;
     }
-
-    driver_data->media_default = driver_data->media_ready[0];              // Default media
   }
 
-  driver_data->left_offset_supported[0] = 0;             // media-left-offset-supported (0,0 for none)
-  driver_data->left_offset_supported[1] = 0;
-  driver_data->top_offset_supported[0] = 0;              // media-top-offset-supported (0,0 for none)
-  driver_data->top_offset_supported[1] = 0;
-  driver_data->num_bin = 0;                              // Number of output bins
-  //driver_data->*bin[PAPPL_MAX_BIN];                    // Output bins
-  //driver_data->bin_default;                            // Default output bin
-  driver_data->mode_configured = 0;                      // label-mode-configured TODO set coorect flag
+  /*
   driver_data->mode_supported = 0;                       // label-mode-supported TODO set correct flag
+  driver_data->mode_configured = 0;                      // label-mode-configured TODO set coorect flag
+    PAPPL_LABEL_MODE_APPLICATOR = 0x0001,		// 'applicator'
+  PAPPL_LABEL_MODE_CUTTER = 0x0002,		// 'cutter'
+  PAPPL_LABEL_MODE_CUTTER_DELAYED = 0x0004,	// 'cutter-delayed'
+  PAPPL_LABEL_MODE_KIOSK = 0x0008,		// 'kiosk'
+  PAPPL_LABEL_MODE_PEEL_OFF = 0x0010,		// 'peel-off'
+  PAPPL_LABEL_MODE_PEEL_OFF_PREPEEL = 0x0020,	// 'peel-off-prepeel'
+  PAPPL_LABEL_MODE_REWIND = 0x0040,		// 'rewind'
+  PAPPL_LABEL_MODE_RFID = 0x0080,		// 'rfid'
+  PAPPL_LABEL_MODE_TEAR_OFF = 0x0100		// 'tear-off'
   driver_data->tear_offset_configured = 0;               // label-tear-offset-configured TODO set correct flag
   driver_data->tear_offset_supported[0] = 0;             // label-tear-offset-supported (0,0 for none) TODO set via user
   driver_data->tear_offset_supported[1] = 0;
-  driver_data->speed_supported[0] = 2;                   // print-speed-supported (in inches per second?) (0,0 for none) TODO check value correctness
-  driver_data->speed_supported[1] = 10;
-  driver_data->speed_default = 3;                        // print-speed-default TODO check value correctness
-
-  // TODO 
-  //driver_data->darkness_default;                       // print-darkness-default
-  //driver_data->darkness_configured;                    // printer-darkness-configured
-  //driver_data->darkness_supported;                     // printer/print-darkness-supported (0 for none)
-  //driver_data->identify_default;                       // "identify-actions-default" values PAPPL_IDENTIFY_ACTIONS_SOUND
-  //driver_data->identify_supported;                     // "identify-actions-supported" values
-  //driver_data->num_features;                           // Number of "ipp-features-supported" values
-  //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values
-  //driver_data->num_vendor;                             // Number of vendor attributes
-  //driver_data->*vendor[PAPPL_MAX_VENDOR];              // Vendor attribute names
+*/
 
   return true;
 }
@@ -567,9 +638,40 @@ void tpcl_identify_cb(
   print_width  = driver_data.media_default.size_width / 10;   // Effective print width
   print_height = driver_data.media_default.size_length / 10;  // Effective print height
 
-  // Add 5mm (50 tenths of mm) to each dimension for label pitch and roll width - TODO implement as user setting
-  label_pitch = print_height + 50;  // Label pitch = print height + label gap TODO
-  roll_width  = print_width + 50;   // Roll width TODO
+  // Request printer IPP attributes
+  ipp_t *printer_attrs = papplPrinterGetDriverAttributes(printer);
+  if (!printer_attrs)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to get printer attributes");
+    papplPrinterCloseDevice(printer);
+    return;
+  }
+
+  // Get label gap from printer settings (0.1mm)
+  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
+  if (gap_attr)
+  {
+    label_pitch = print_height + ippGetInteger(gap_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings, pitch is: %d (0.1mm)", label_pitch);
+  }
+  else
+  {
+    label_pitch = print_height + 50;
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm, pitch is: %d (0.1mm)", label_pitch);
+  }
+
+  // Get roll margin from printer settings (0.1mm)
+  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
+  if (margin_attr)
+  {
+    roll_width = print_width + ippGetInteger(margin_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated roll width from printer settings: %d (0.1mm)", roll_width);
+  }
+  else
+  {
+    roll_width  = print_width + 5;
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 0.5mm, roll width is: %d (0.1mm)", roll_width);
+  }
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
 
@@ -582,6 +684,7 @@ void tpcl_identify_cb(
   if (label_pitch > max_pitch)
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Label pitch %d (0.1mm) exceeds maximum %d (0.1mm) for %ddpi resolution", label_pitch, max_pitch, driver_data.y_default);
+    ippDelete(printer_attrs);
     papplPrinterCloseDevice(printer);
     return;
   }
@@ -589,6 +692,7 @@ void tpcl_identify_cb(
   if (print_height > max_height)
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Print height %d (0.1mm) exceeds maximum %d (0.1mm) for %ddpi resolution", print_height, max_height, driver_data.y_default);
+    ippDelete(printer_attrs);
     papplPrinterCloseDevice(printer);
     return;
   }
@@ -660,6 +764,7 @@ Thermal transfer models:
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
 
   papplDeviceFlush(device);
+  ippDelete(printer_attrs);
   papplPrinterCloseDevice(printer);
   return;
 }

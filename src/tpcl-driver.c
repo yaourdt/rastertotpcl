@@ -349,6 +349,12 @@ tpcl_driver_cb(
   ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-default", NULL, "topix");
   driver_data->num_vendor++;
 
+  // Graphics mode
+  driver_data->vendor[driver_data->num_vendor] = "feed-on-label-size-change";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-supported", 2, NULL, (const char *[]){"yes", "no"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-default", NULL, "yes");
+  driver_data->num_vendor++;
+
   //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
   //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
 
@@ -953,11 +959,33 @@ tpcl_rstartjob_cb(
   }
   papplJobSetData(job, tpcl_job);
 
-  // Set graphics mode 
-  // TODO: Add support for TOPIX compression and let user choose. for not 150 or 300 dpi, do not allow topix mode
-  //tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
-  //tpcl_job->gmode = TEC_GMODE_HEX_AND;
+  // Set graphics mode from vendor options
+  char *graphics_mode = tpcl_get_vendor_option(options, "graphics-mode");
+  if (graphics_mode)
+  {
+    if (strcmp(graphics_mode, "nibble-and") == 0)
+      tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
+    else if (strcmp(graphics_mode, "hex-and") == 0)
+      tpcl_job->gmode = TEC_GMODE_HEX_AND;
+    else if (strcmp(graphics_mode, "topix") == 0)
   tpcl_job->gmode = TEC_GMODE_TOPIX;
+    else if (strcmp(graphics_mode, "nibble-or") == 0)
+      tpcl_job->gmode = TEC_GMODE_NIBBLE_OR;
+    else if (strcmp(graphics_mode, "hex-or") == 0)
+      tpcl_job->gmode = TEC_GMODE_HEX_OR;
+    else
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_WARN, "Unknown graphics mode '%s', defaulting to TOPIX", graphics_mode);
+      tpcl_job->gmode = TEC_GMODE_TOPIX;
+    }
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Graphics mode set to: %s (%d)", graphics_mode, tpcl_job->gmode);
+  }
+  else
+  {
+    // Default to TOPIX if not specified
+    tpcl_job->gmode = TEC_GMODE_TOPIX;
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Graphics mode not specified, defaulting to TOPIX (%d)", tpcl_job->gmode);
+  }
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {

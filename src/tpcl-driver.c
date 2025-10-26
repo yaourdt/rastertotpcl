@@ -24,7 +24,12 @@
 // TODO report supplies from status message
 // TODO printer icons
 // Todo choose dithering algo
-// TODO menschenlesbare namen für label-gap etc
+// TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
+// TODO: Orientation is ? instead of the correct defaut
+// Drucksättigung ist in %, was ist das?
+// Druckgeschwindigkeit ist 0 inch
+// TODO set label processing modes according to cutter / peeler / tear bar installed or not
+
 
 #include "tpcl-driver.h"
 #include "dithering.h"
@@ -206,6 +211,11 @@ void tpcl_delete_cb(
  * Support functions
  */
 
+char* tpcl_get_vendor_option(
+  pappl_pr_options_t       *options,
+  const char               *key
+);
+
 static void tpcl_free_job_buffers(
   pappl_job_t              *job,
   tpcl_job_t               *tpcl_job
@@ -265,7 +275,7 @@ tpcl_driver_cb(
   driver_data->has_supplies = false;                     // Printer can report supplies.
   driver_data->input_face_up = true;		                 // Does input media come in face-up?
   driver_data->output_face_up = true;		                 // Does output media come out face-up?
-  driver_data->orient_default = IPP_ORIENT_NONE;         // Default orientation
+  driver_data->orient_default = IPP_ORIENT_PORTRAIT;     // Default orientation
   driver_data->color_supported =                         // Highest supported color mode advertised via IPP
     PAPPL_COLOR_MODE_BI_LEVEL  |                         //  - black & white
     PAPPL_COLOR_MODE_MONOCHROME;                         //  - grayscale
@@ -285,11 +295,19 @@ tpcl_driver_cb(
   driver_data->sides_default = PAPPL_SIDES_ONE_SIDED;    // IPP "sides" bit values for default
   driver_data->finishings = PAPPL_FINISHINGS_NONE;       // Supported finishings such as punch or staple
   driver_data->num_bin = 0;                              // Number of output bins
-
   driver_data->identify_supported =                      // Supported identify actions (we actually feed a blank label)
     PAPPL_IDENTIFY_ACTIONS_SOUND;
   driver_data->identify_default =                        // Default identification action (we actually feed a blank label)
     PAPPL_IDENTIFY_ACTIONS_SOUND;
+  driver_data->mode_supported =                          // Supported label processing modes
+    PAPPL_LABEL_MODE_CUTTER |                            // - cut immediately after each label
+    PAPPL_LABEL_MODE_CUTTER_DELAYED |                    // - cut after n labels
+    PAPPL_LABEL_MODE_PEEL_OFF |                          // - directly stip the label so it is ready to be applied
+    PAPPL_LABEL_MODE_TEAR_OFF;                           // - rewind label to tear bar position
+  driver_data->mode_configured = 0;                      // Default label processing modes
+  driver_data->tear_offset_supported[0] =   0;           // Min offset when in mode for tearing labels
+  driver_data->tear_offset_supported[1] = 180;           // Max offset when in mode for tearing labels
+  driver_data->tear_offset_configured = 0;               // Default offset when in mode for tearing labels
 
   // Define Toshiba TEC specific vendor options (max 32 allowed by PAPPL)
   driver_data->num_vendor = 0;                           // Number of available vendor options
@@ -297,14 +315,38 @@ tpcl_driver_cb(
 
   // Gap beween labels in units of 0.1mm
   driver_data->vendor[driver_data->num_vendor] = "label-gap";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 10, 500);
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 00, 200);
   ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
   driver_data->num_vendor++;
 
-  // Roll margin in units of 0.1mm (difference between backing paper and label)
+  // Roll margin in units of 0.1mm (width difference between backing paper and label)
   driver_data->vendor[driver_data->num_vendor] = "roll-margin";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported", 10, 500);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  ,  5     );
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported",  0, 300);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  , 10     );
+  driver_data->num_vendor++;
+
+  // Sensor type for label detection
+  driver_data->vendor[driver_data->num_vendor] = "sensor-type";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 3, NULL, (const char *[]){"none", "reflective", "transmissive"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-default", NULL, "transmissive");
+  driver_data->num_vendor++;
+
+  // Cut/non-cut selection
+  driver_data->vendor[driver_data->num_vendor] = "label-cut";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-supported", 2, NULL, (const char *[]){"non-cut", "cut"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-default", NULL, "non-cut");
+  driver_data->num_vendor++;
+
+  // Feed mode selection
+  driver_data->vendor[driver_data->num_vendor] = "feed-mode";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 3, NULL, (const char *[]){"batch", "strip", "partial-cut"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-default", NULL, "batch");
+  driver_data->num_vendor++;
+
+  // Graphics mode
+  driver_data->vendor[driver_data->num_vendor] = "graphics-mode";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-supported", 5, NULL, (const char *[]){"nibble-and", "hex-and", "topix", "nibble-or", "hex-or"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-default", NULL, "topix");
   driver_data->num_vendor++;
 
   //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
@@ -369,12 +411,12 @@ tpcl_driver_cb(
       driver_data->media[1] = strdup(roll_max);
       papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Roll media dimensions: min=%s, max=%s", driver_data->media[0], driver_data->media[1]);
 
-    // Available media sources
+      // Available media sources
 	    driver_data->num_source = 1;                       // Number of media sources (trays/rolls)
       driver_data->source[0] = "main-roll";              // Media sources
       papplCopyString(driver_data->media_ready[0].source, driver_data->source[0], 63);
 
-    // Available media types
+      // Available media types
       driver_data->num_type = 1;                         // Number of media types
       driver_data->type[0] = "direct-thermal";           // Media types
       papplCopyString(driver_data->media_ready[0].type,   driver_data->type[0],   63);
@@ -428,23 +470,6 @@ tpcl_driver_cb(
       break;
     }
   }
-
-  /*
-  driver_data->mode_supported = 0;                       // label-mode-supported TODO set correct flag
-  driver_data->mode_configured = 0;                      // label-mode-configured TODO set coorect flag
-    PAPPL_LABEL_MODE_APPLICATOR = 0x0001,		// 'applicator'
-  PAPPL_LABEL_MODE_CUTTER = 0x0002,		// 'cutter'
-  PAPPL_LABEL_MODE_CUTTER_DELAYED = 0x0004,	// 'cutter-delayed'
-  PAPPL_LABEL_MODE_KIOSK = 0x0008,		// 'kiosk'
-  PAPPL_LABEL_MODE_PEEL_OFF = 0x0010,		// 'peel-off'
-  PAPPL_LABEL_MODE_PEEL_OFF_PREPEEL = 0x0020,	// 'peel-off-prepeel'
-  PAPPL_LABEL_MODE_REWIND = 0x0040,		// 'rewind'
-  PAPPL_LABEL_MODE_RFID = 0x0080,		// 'rfid'
-  PAPPL_LABEL_MODE_TEAR_OFF = 0x0100		// 'tear-off'
-  driver_data->tear_offset_configured = 0;               // label-tear-offset-configured TODO set correct flag
-  driver_data->tear_offset_supported[0] = 0;             // label-tear-offset-supported (0,0 for none) TODO set via user
-  driver_data->tear_offset_supported[1] = 0;
-*/
 
   return true;
 }
@@ -652,12 +677,12 @@ void tpcl_identify_cb(
   if (gap_attr)
   {
     label_pitch = print_height + ippGetInteger(gap_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings, pitch is: %d (0.1mm)", label_pitch);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_pitch - print_height);
   }
   else
   {
     label_pitch = print_height + 50;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm, pitch is: %d (0.1mm)", label_pitch);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
   }
 
   // Get roll margin from printer settings (0.1mm)
@@ -665,12 +690,12 @@ void tpcl_identify_cb(
   if (margin_attr)
   {
     roll_width = print_width + ippGetInteger(margin_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated roll width from printer settings: %d (0.1mm)", roll_width);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_width - print_width);
   }
   else
   {
-    roll_width  = print_width + 5;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 0.5mm, roll width is: %d (0.1mm)", roll_width);
+    roll_width  = print_width + 10;
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
   }
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
@@ -710,55 +735,71 @@ void tpcl_identify_cb(
   papplDevicePuts(device, command);
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
-  // Send feed command
+  // Build feed command dynamically {Tabcde|}
+  // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+  char sensor_char = '2';
+  ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
+  if (sensor_attr)
+  {
+    const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
+    if (strcmp(sensor_type, "none") == 0)
+      sensor_char = '0';
+    else if (strcmp(sensor_type, "reflective") == 0)
+      sensor_char = '1';
+  }
 
-  /*
-  [ESC] Tabcde [LF] [NUL]
-  
-a: Type of sensor
-0: No sensor
-1: Reflective sensor
-2: Transmissive sensor (when using normal labels)
-3: Transmissive sensor (when using normal labels)
-4: Reflective sensor
+  // b: Cut selection (0=non-cut, 1=cut)
+  char cut_char = '0';
+  ipp_attribute_t *cut_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
+  if (cut_attr)
+  {
+    const char *cut_type = ippGetString(cut_attr, 0, NULL);
+    if (strcmp(cut_type, "cut") == 0)
+      cut_char = '1';
+  }
 
-b: Selects cut or non-cut
-0: Non-cut
-1: Cut
+  // c: Feed mode (C=batch, D=strip, F=partial-cut)
+  char feed_mode_char = 'C';
+  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
+  if (feed_mode_attr)
+  {
+    const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
+    if (strcmp(feed_mode, "strip") == 0)
+      feed_mode_char = 'D';
+    else if (strcmp(feed_mode, "partial-cut") == 0)
+      feed_mode_char = 'F';
+  }
 
-c: Feed mode
-C: Batch mode (Cut and feed when “Cut” is selected for parameter b.)
-D: Strip mode (with back feed)
-E: Strip mode (Reserved for future)
-F: Partial cut mode (Non back feed cut mode)
+  // d: Feed speed (use default speed from driver data as hex char)
+  char speed_char = '0' + driver_data.speed_default;
+  if (driver_data.speed_default > 9)
+    speed_char = 'A' + (driver_data.speed_default - 10);
 
-d: Feedspeed
-1: 2 inches/sec (2 inches/sec for the 300 dpi model)
-2: 2 inches/sec (2 inches/sec for the 300 dpi model)
-3: 3 inches/sec (3 inches/sec for the 300 dpi model)
-4: 4 inches/sec (4 inches/sec for the 300 dpi model)
-5: 5 inches/sec (4 inches/sec for the 300 dpi model)
-6: 5 inches/sec (4 inches/sec for the 300 dpi model)
-7: 5 inches/sec (4 inches/sec for the 300 dpi model)
-8: 5 inches/sec (4 inches/sec for the 300 dpi model)
-9: 5 inches/sec (4 inches/sec for the 300 dpi model)
-A: 5 inches/sec (4 inches/sec for the 300 dpi model)
-B: 5 inches/sec. (4 inches/sec for the 300 dpi model)
+  // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+  char ribbon_char = '0';
+  const char *media_type = driver_data.media_default.type;
 
-e: With/without ribbon
-Direct thermal models:
-Set to 0. (If “1” or “2” is specified, a ribbon error results.)
-Thermal transfer models:
-0: Without ribbon
-1: With ribbon
-2: With ribbon
+  if (media_type)
+  {
+    if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
+    {
+      ribbon_char = '1';
+    }
+    else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
+    {
+      ribbon_char = '2';
+    }
+  }
 
-*/
   snprintf(
     command,
     sizeof(command),
-    "{T20C10|}\n"
-     //TODO: actually calculate from label size and other settings
+    "{T%c%c%c%c%c|}\n",
+    sensor_char,
+    cut_char,
+    feed_mode_char,
+    speed_char,
+    ribbon_char
   );
   papplDevicePuts(device, command);
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
@@ -1475,6 +1516,33 @@ void tpcl_delete_cb(
 )
 {
   return;
+}
+
+
+/*
+ * 'tpcl_get_vendor_option()' - Read a custom vendor option
+ *
+ * Returns a setting value as string, if found, else NULL for the requested key.
+ */
+
+char* tpcl_get_vendor_option(
+  pappl_pr_options_t       *options,
+  const char               *key
+)
+{
+  if (!options || !key)
+  {
+    return NULL;
+  }
+
+  for (int i = 0; i < options->num_vendor; i++)
+  {
+    if (!strcmp(options->vendor[i].name, key))
+    {
+      return options->vendor[i].value;
+    }
+  }
+  return NULL;
 }
 
 

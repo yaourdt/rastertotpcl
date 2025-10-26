@@ -14,14 +14,11 @@
 // TODO: Maximale Label länge programmieren: : A sensor calibration is possible up to 254-mm pitch media.
 // TODO: Propper error handling wie zB Deckel offen
 // TODO: Persist previous page size between job runs to use (T) command. two options:
-//       - papplSystemSetSaveCallback() ,papplPrinterSetSaveCallback() <- needs printer dependence!
-//       - papplPrinterAddAttr(printer, IPP_TAG_INTEGER, "myapp-my-var", value);
 // TODO: Implement testpage callback
 // TODO: Implement delete printer callback
 // TODO: Clean out printer properties in tpcl_driver_cb
 // TODO set IPP attributes
 // TODO POINTS_PER_INCH, MM_PER_INCH in all source
-// TODO report supplies from status message
 // TODO printer icons
 // Todo choose dithering algo
 // TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
@@ -34,6 +31,8 @@
 #include "tpcl-driver.h"
 #include "dithering.h"
 #include <math.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 /*
  * Constants for conversion
@@ -129,6 +128,22 @@ typedef struct {
   unsigned char            *comp_buffer_ptr;             // Current position in comp_buffer (for TOPIX)
   int                      y_offset;                     // Y offset for next image in 0.1mm (for TOPIX)
 } tpcl_job_t;
+
+
+/*
+ * Printer state data structure for persisting label dimensions
+ */
+
+typedef struct {
+  int                      last_print_width;             // Last effective print width (0.1mm)
+  int                      last_print_height;            // Last effective print height (0.1mm)
+  int                      last_label_gap;               // Last label gap (0.1mm)
+  int                      last_roll_margin;             // Last roll margin (0.1mm)
+  bool                     initialized;                  // Whether state has been initialized
+} tpcl_printer_state_t;
+
+// Global state for tracking label dimensions between jobs
+static tpcl_printer_state_t g_printer_state = {0, 0, 0, 0, false};
 
 
 /*
@@ -230,6 +245,16 @@ static ssize_t tpcl_topix_output_buffer(
   pappl_pr_options_t       *options,
   pappl_device_t           *device,
   tpcl_job_t               *tpcl_job
+);
+
+static bool tpcl_load_printer_state(
+  pappl_printer_t          *printer,
+  tpcl_printer_state_t     *state
+);
+
+static bool tpcl_save_printer_state(
+  pappl_printer_t          *printer,
+  const tpcl_printer_state_t *state
 );
 
 
@@ -968,7 +993,7 @@ tpcl_rstartjob_cb(
     else if (strcmp(graphics_mode, "hex-and") == 0)
       tpcl_job->gmode = TEC_GMODE_HEX_AND;
     else if (strcmp(graphics_mode, "topix") == 0)
-  tpcl_job->gmode = TEC_GMODE_TOPIX;
+      tpcl_job->gmode = TEC_GMODE_TOPIX;
     else if (strcmp(graphics_mode, "nibble-or") == 0)
       tpcl_job->gmode = TEC_GMODE_NIBBLE_OR;
     else if (strcmp(graphics_mode, "hex-or") == 0)
@@ -1100,8 +1125,123 @@ tpcl_rstartjob_cb(
   papplDevicePuts(device, command);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
+  // Load previous printer state from file if not already loaded
+  pappl_printer_t *printer = papplJobGetPrinter(job);
+  if (!g_printer_state.initialized)
+  {
+    tpcl_load_printer_state(printer, &g_printer_state);
+  }
+
+  // Check if label dimensions have changed from previous job
+  bool label_size_changed = false;
+
+  if (g_printer_state.initialized)
+  {
+    if (g_printer_state.last_print_width != tpcl_job->print_width ||
+        g_printer_state.last_print_height != tpcl_job->print_height ||
+        g_printer_state.last_label_gap != label_gap ||
+        g_printer_state.last_roll_margin != roll_margin)
+    {
+      label_size_changed = true;
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Label size changed: old(%d×%d+%d/%d) → new(%d×%d+%d/%d) [width×height+gap/margin in 0.1mm]",
+        g_printer_state.last_print_width, g_printer_state.last_print_height,
+        g_printer_state.last_label_gap, g_printer_state.last_roll_margin,
+        tpcl_job->print_width, tpcl_job->print_height, label_gap, roll_margin);
+    }
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "No previous label dimensions found, this is likely the first job");
+    label_size_changed = true;  // Treat first job as changed to initialize
+  }
+
+  // Update stored label dimensions for next job
+  g_printer_state.last_print_width = tpcl_job->print_width;
+  g_printer_state.last_print_height = tpcl_job->print_height;
+  g_printer_state.last_label_gap = label_gap;
+  g_printer_state.last_roll_margin = roll_margin;
+  g_printer_state.initialized = true;
+
+  // Save state to file for persistence across restarts
+  tpcl_save_printer_state(printer, &g_printer_state);
+
+  // If label size changed and feed-on-label-size-change is enabled, send feed command
+  char *feed_on_change_str = tpcl_get_vendor_option(options, "feed-on-label-size-change");
+  bool should_feed = label_size_changed && feed_on_change_str && (strcmp(feed_on_change_str, "yes") == 0);
+
+  if (should_feed)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Label size changed and feed-on-label-size-change is enabled, sending feed command");
+
+    // Build feed command dynamically {Tabcde|} using same logic as tpcl_identify_cb
+    pappl_pr_driver_data_t driver_data;
+    if (!papplPrinterGetDriverData(printer, &driver_data))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data for feed command");
+    }
+    else
+    {
+      // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+      char sensor_char = '2';
+      char *sensor_type = tpcl_get_vendor_option(options, "sensor-type");
+      if (sensor_type)
+      {
+        if (strcmp(sensor_type, "none") == 0)
+          sensor_char = '0';
+        else if (strcmp(sensor_type, "reflective") == 0)
+          sensor_char = '1';
+      }
+
+      // b: Cut selection (0=non-cut, 1=cut)
+      char cut_char = '0';
+      char *cut_type = tpcl_get_vendor_option(options, "label-cut");
+      if (cut_type && strcmp(cut_type, "cut") == 0)
+        cut_char = '1';
+
+      // c: Feed mode (C=batch, D=strip, F=partial-cut)
+      char feed_mode_char = 'C';
+      char *feed_mode = tpcl_get_vendor_option(options, "feed-mode");
+      if (feed_mode)
+      {
+        if (strcmp(feed_mode, "strip") == 0)
+          feed_mode_char = 'D';
+        else if (strcmp(feed_mode, "partial-cut") == 0)
+          feed_mode_char = 'F';
+      }
+
+      // d: Feed speed (use default speed from driver data as hex char)
+      char speed_char = '0' + driver_data.speed_default;
+      if (driver_data.speed_default > 9)
+        speed_char = 'A' + (driver_data.speed_default - 10);
+
+      // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+      char ribbon_char = '0';
+      const char *media_type = driver_data.media_default.type;
+      if (media_type)
+      {
+        if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
+          ribbon_char = '1';
+        else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
+          ribbon_char = '2';
+      }
+
+      snprintf(
+        command,
+        sizeof(command),
+        "{T%c%c%c%c%c|}\n",
+        sensor_char,
+        cut_char,
+        feed_mode_char,
+        speed_char,
+        ribbon_char
+      );
+      papplDevicePuts(device, command);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+    }
+  }
+
   // Send feed adjustment command - TODO only send when necessary; current command format throws error; should be configurable via job options
-  if (false)
+  if (false) //feed-on-label-size-change
   {
     snprintf(
       command,
@@ -1130,18 +1270,6 @@ tpcl_rstartjob_cb(
     );
     papplDevicePuts(device, command);
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
-  }
- 
-  // If label size changed, send feed command - TODO determine label size change
-  if (false)
-  {
-    snprintf(
-      command,
-      sizeof(command),
-      "{T20C10|}\n" //TODO: actually calculate from label size and other settings
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
   }
 
   return true;
@@ -1743,4 +1871,126 @@ tpcl_topix_output_buffer(
   tpcl_job->comp_buffer_ptr = tpcl_job->comp_buffer;
 
   return bytes_written;
+}
+
+
+/*
+ * 'tpcl_load_printer_state()' - Load printer state from file
+ *
+ * Loads the last used label dimensions from /var/cache/tpcl-printer-app/<printer-name>.state
+ * Returns true if state was loaded successfully, false otherwise.
+ */
+
+static bool
+tpcl_load_printer_state(
+  pappl_printer_t          *printer,
+  tpcl_printer_state_t     *state
+)
+{
+  char filepath[512];
+  const char *printer_name = papplPrinterGetName(printer);
+  FILE *fp;
+  char line[512];
+  int loaded_width = -1, loaded_height = -1, loaded_gap = -1, loaded_margin = -1;
+
+  // Construct file path
+  snprintf(filepath, sizeof(filepath), "/var/cache/tpcl-printer-app/%s.state", printer_name);
+
+  // Try to open the state file
+  fp = fopen(filepath, "r");
+  if (!fp)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No previous state file found at %s", filepath);
+    return false;
+  }
+
+  // Read state from file
+  while (fgets(line, sizeof(line), fp))
+  {
+    // Remove trailing newline
+    line[strcspn(line, "\n")] = '\0';
+
+    if (sscanf(line, "last_print_width=%d", &loaded_width) == 1)
+      continue;
+    if (sscanf(line, "last_print_height=%d", &loaded_height) == 1)
+      continue;
+    if (sscanf(line, "last_label_gap=%d", &loaded_gap) == 1)
+      continue;
+    if (sscanf(line, "last_roll_margin=%d", &loaded_margin) == 1)
+      continue;
+  }
+
+  fclose(fp);
+
+  // Validate that we loaded all required fields
+  if (loaded_width < 0 || loaded_height < 0 || loaded_gap < 0 || loaded_margin < 0)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_WARN, "Incomplete state file at %s, ignoring", filepath);
+    return false;
+  }
+
+  // Copy loaded state
+  state->last_print_width = loaded_width;
+  state->last_print_height = loaded_height;
+  state->last_label_gap = loaded_gap;
+  state->last_roll_margin = loaded_margin;
+  state->initialized = true;
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Loaded state from %s: width=%d, height=%d, gap=%d, margin=%d",
+    filepath, loaded_width, loaded_height, loaded_gap, loaded_margin);
+
+  return true;
+}
+
+
+/*
+ * 'tpcl_save_printer_state()' - Save printer state to file
+ *
+ * Saves the current label dimensions to /var/cache/tpcl-printer-app/<printer-name>.state
+ * Returns true if state was saved successfully, false otherwise.
+ */
+
+static bool
+tpcl_save_printer_state(
+  pappl_printer_t          *printer,
+  const tpcl_printer_state_t *state
+)
+{
+  char filepath[512];
+  char dirpath[] = "/var/cache/tpcl-printer-app";
+  const char *printer_name = papplPrinterGetName(printer);
+  FILE *fp;
+
+  // Create directory if it doesn't exist
+  if (mkdir(dirpath, 0755) != 0 && errno != EEXIST)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to create directory %s: %s", dirpath, strerror(errno));
+    return false;
+  }
+
+  // Construct file path
+  snprintf(filepath, sizeof(filepath), "%s/%s.state", dirpath, printer_name);
+
+  // Open file for writing
+  fp = fopen(filepath, "w");
+  if (!fp)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open state file %s for writing: %s", filepath, strerror(errno));
+    return false;
+  }
+
+  // Write state to file
+  fprintf(fp, "# TPCL Printer State File\n");
+  fprintf(fp, "# Auto-generated - do not edit manually\n");
+  fprintf(fp, "last_print_width=%d\n", state->last_print_width);
+  fprintf(fp, "last_print_height=%d\n", state->last_print_height);
+  fprintf(fp, "last_label_gap=%d\n", state->last_label_gap);
+  fprintf(fp, "last_roll_margin=%d\n", state->last_roll_margin);
+
+  fclose(fp);
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Saved state to %s: width=%d, height=%d, gap=%d, margin=%d",
+    filepath, state->last_print_width, state->last_print_height, state->last_label_gap, state->last_roll_margin);
+
+  return true;
 }

@@ -10,16 +10,16 @@
  *
  * Licensed under GNU GPL v3.
  */
-// TODO: Propper error handling wie zB Deckel offen
-// TODO: Persist previous page size between job runs to use (T) command. two options:
+// TODO: Persist previous page size between job runs to use (T)
+// TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
+// TODO: Orientation is ? instead of the correct defaut
+
 // TODO: Implement testpage callback
-// TODO: Clean out printer properties in tpcl_driver_cb
+// TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
 // TODO POINTS_PER_INCH, MM_PER_INCH in all source
 // TODO printer icons
 // Todo choose dithering algo
-// TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
-// TODO: Orientation is ? instead of the correct defaut
 // Drucksättigung ist in %, was ist das?
 // Druckgeschwindigkeit ist 0 inch
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
@@ -37,6 +37,16 @@
 
 #define POINTS_PER_INCH 72.0
 #define MM_PER_INCH     25.4
+
+/*
+ * Platform-specific state file directory
+ */
+
+#ifdef __APPLE__
+  #define TPCL_STATE_DIR "/Library/Caches/tpcl-printer-app"
+#else
+  #define TPCL_STATE_DIR "/var/cache/tpcl-printer-app"
+#endif
 
 /*
  * TPCL Graphics Modes
@@ -1698,7 +1708,7 @@ void tpcl_delete_cb(
   const char *printer_name = papplPrinterGetName(printer);
 
   // Construct state file path
-  snprintf(filepath, sizeof(filepath), "/var/cache/tpcl-printer-app/%s.state", printer_name);
+  snprintf(filepath, sizeof(filepath), "%s/%s.state", TPCL_STATE_DIR, printer_name);
 
   // Delete state file if it exists
   if (unlink(filepath) == 0)
@@ -1911,7 +1921,7 @@ tpcl_load_printer_state(
   int loaded_width = -1, loaded_height = -1, loaded_gap = -1, loaded_margin = -1;
 
   // Construct file path
-  snprintf(filepath, sizeof(filepath), "/var/cache/tpcl-printer-app/%s.state", printer_name);
+  snprintf(filepath, sizeof(filepath), "%s/%s.state", TPCL_STATE_DIR, printer_name);
 
   // Try to open the state file
   fp = fopen(filepath, "r");
@@ -1974,19 +1984,18 @@ tpcl_save_printer_state(
 )
 {
   char filepath[512];
-  char dirpath[] = "/var/cache/tpcl-printer-app";
   const char *printer_name = papplPrinterGetName(printer);
   FILE *fp;
 
   // Create directory if it doesn't exist
-  if (mkdir(dirpath, 0755) != 0 && errno != EEXIST)
+  if (mkdir(TPCL_STATE_DIR, 0755) != 0 && errno != EEXIST)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to create directory %s: %s", dirpath, strerror(errno));
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to create directory %s: %s", TPCL_STATE_DIR, strerror(errno));
     return false;
   }
 
   // Construct file path
-  snprintf(filepath, sizeof(filepath), "%s/%s.state", dirpath, printer_name);
+  snprintf(filepath, sizeof(filepath), "%s/%s.state", TPCL_STATE_DIR, printer_name);
 
   // Open file for writing
   fp = fopen(filepath, "w");

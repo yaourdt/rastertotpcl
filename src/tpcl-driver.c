@@ -10,12 +10,9 @@
  *
  * Licensed under GNU GPL v3.
  */
-// TODO: Replace memmove etc with papplCopyString
-// TODO: Maximale Label länge programmieren: : A sensor calibration is possible up to 254-mm pitch media.
 // TODO: Propper error handling wie zB Deckel offen
 // TODO: Persist previous page size between job runs to use (T) command. two options:
 // TODO: Implement testpage callback
-// TODO: Implement delete printer callback
 // TODO: Clean out printer properties in tpcl_driver_cb
 // TODO set IPP attributes
 // TODO POINTS_PER_INCH, MM_PER_INCH in all source
@@ -1689,7 +1686,7 @@ const char* tpcl_testpage_cb(
 /*
  * 'tpcl_delete_cb()' - Callback for deleting a printer
  *
- * Currently not implemented, just exists so server does not crash. TODO
+ * Cleans up printer resources including the persistent state file.
  */
 
 void tpcl_delete_cb(
@@ -1697,6 +1694,26 @@ void tpcl_delete_cb(
   pappl_pr_driver_data_t   *data
 )
 {
+  char filepath[512];
+  const char *printer_name = papplPrinterGetName(printer);
+
+  // Construct state file path
+  snprintf(filepath, sizeof(filepath), "/var/cache/tpcl-printer-app/%s.state", printer_name);
+
+  // Delete state file if it exists
+  if (unlink(filepath) == 0)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Deleted state file: %s", filepath);
+  }
+  else if (errno == ENOENT)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No state file to delete at %s", filepath);
+  }
+  else
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_WARN, "Failed to delete state file %s: %s", filepath, strerror(errno));
+  }
+
   return;
 }
 

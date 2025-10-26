@@ -1031,9 +1031,35 @@ tpcl_rstartjob_cb(
   tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * 254.0 / 72.0);  // Effective print width (0.1mm)
   tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * 254.0 / 72.0);  // Effective print height (0.1mm)
 
-  // Add 5mm (50 tenths of mm) margins TODO let user set this
-  tpcl_job->label_pitch = tpcl_job->print_height + 50;  // Label pitch = print height + label gap TODO
-  tpcl_job->roll_width  = tpcl_job->print_width + 50;   // Roll width TODO
+  // Get label gap from vendor options (0.1mm)
+  char *gap_str = tpcl_get_vendor_option(options, "label-gap");
+  int label_gap = 50;  // Default: 5mm
+  if (gap_str)
+  {
+    label_gap = atoi(gap_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from vendor options: %d (0.1mm)", label_gap);
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
+  }
+
+  // Get roll margin from vendor options (0.1mm)
+  char *margin_str = tpcl_get_vendor_option(options, "roll-margin");
+  int roll_margin = 10;  // Default: 1mm
+  if (margin_str)
+  {
+    roll_margin = atoi(margin_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from vendor options: %d (0.1mm)", roll_margin);
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
+  }
+
+  // Calculate label pitch and roll width from retrieved values
+  tpcl_job->label_pitch = tpcl_job->print_height + label_gap;
+  tpcl_job->roll_width  = tpcl_job->print_width + roll_margin;
 
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));

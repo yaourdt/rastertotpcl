@@ -23,7 +23,7 @@
 // Drucksättigung ist in %, was ist das?
 // Druckgeschwindigkeit ist 0 inch
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
-
+// TODO AY and AX commands
 
 #include "tpcl-driver.h"
 #include "dithering.h"
@@ -302,7 +302,20 @@ tpcl_driver_cb(
   driver_data->format = "application/vnd.toshiba-tpcl";  // Native file format
   driver_data->ppm = 10;                                 // Pages per minute (guesstimate)
   driver_data->ppm_color = 0;                            // No color printing
-  //pappl_icon_t icons[3];                               // "printer-icons" values. TODO: Implement
+
+  // Printer icons - 64x64, 128x128, and 256x256 pixel sizes
+  strncpy(driver_data->icons[0].filename, "../assets/icon-b-ev4d-64.png", sizeof(driver_data->icons[0].filename) - 1);
+  driver_data->icons[0].data = NULL;
+  driver_data->icons[0].datalen = 0;
+
+  strncpy(driver_data->icons[1].filename, "../assets/icon-b-ev4d-128.png", sizeof(driver_data->icons[1].filename) - 1);
+  driver_data->icons[1].data = NULL;
+  driver_data->icons[1].datalen = 0;
+
+  strncpy(driver_data->icons[2].filename, "../assets/icon-b-ev4d-256.png", sizeof(driver_data->icons[2].filename) - 1);
+  driver_data->icons[2].data = NULL;
+  driver_data->icons[2].datalen = 0;
+
   driver_data->kind = PAPPL_KIND_LABEL;		            	 // Type of printer
   driver_data->has_supplies = false;                     // Printer can report supplies.
   driver_data->input_face_up = true;		                 // Does input media come in face-up?

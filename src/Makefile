@@ -1,11 +1,15 @@
 # Makefile for TPCL Printer Application
 #
-# Build the TPCL printer application using PAPPL from external/pappl
+# This file is not meant to run standalone. Use Makefile in project root.
+
+# Directories
+BINDIR = ../bin
+PAPPL_DIR = ../external/pappl
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -O2 -g -I../external/pappl -I../external/pappl/pappl
-LDFLAGS = -L../external/pappl/pappl -Wl,-rpath,$(shell pwd)/../external/pappl/pappl
+CFLAGS = -Wall -O2 -g -I$(PAPPL_DIR) -I$(PAPPL_DIR)/pappl
+LDFLAGS = -L$(PAPPL_DIR)/pappl -Wl,-rpath,$(shell cd .. && pwd)/external/pappl/pappl
 LIBS = -lpappl -lcups -lpthread -lm
 
 # Get additional flags from PAPPL's build
@@ -13,43 +17,42 @@ PAPPL_LIBS = -lavahi-common -lavahi-client -lssl -lcrypto -ljpeg -lpng16 -lusb-1
 
 # Target executable
 TARGET = tpcl-printer-app
+TARGET_PATH = $(BINDIR)/$(TARGET)
 
 # Source files
 SOURCES = $(wildcard *.c)
 OBJECTS = $(SOURCES:.c=.o)
 
 # Headers
-HEADERS = tpcl-driver.h tpcl-media.h
+HEADERS = tpcl-driver.h dithering.h
 
-.PHONY: all clean install
+.PHONY: all clean install uninstall
 
-all: $(TARGET)
+all: $(TARGET_PATH)
 
-$(TARGET): $(OBJECTS)
+$(TARGET_PATH): $(OBJECTS)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS) $(PAPPL_LIBS)
+	@echo "Built: $(TARGET_PATH)"
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -f $(OBJECTS)
 
-install: $(TARGET)
+install: $(TARGET_PATH)
+	@echo "Installing $(TARGET) to system directories..."
 	install -d $(DESTDIR)/usr/local/bin
-	install -m 755 $(TARGET) $(DESTDIR)/usr/local/bin/
+	install -m 755 $(TARGET_PATH) $(DESTDIR)/usr/local/bin/
 	install -d $(DESTDIR)/usr/local/share/tpcl-printer-app
 	install -d $(DESTDIR)/var/lib/tpcl-printer-app
 	install -d $(DESTDIR)/var/spool/tpcl-printer-app
+	@echo "Installation complete."
 
-help:
-	@echo "TPCL Printer Application Build"
-	@echo ""
-	@echo "Targets:"
-	@echo "  all     - Build the printer application (default)"
-	@echo "  clean   - Remove build artifacts"
-	@echo "  install - Install to system directories"
-	@echo "  help    - Show this help message"
-	@echo ""
-	@echo "Prerequisites:"
-	@echo "  - PAPPL must be built in ../external/pappl"
-	@echo "  - Run 'make' in external/pappl first if not done"
+uninstall:
+	@echo "Uninstalling $(TARGET) from system directories..."
+	rm -f $(DESTDIR)/usr/local/bin/$(TARGET)
+	rm -rf $(DESTDIR)/usr/local/share/tpcl-printer-app
+	rm -rf $(DESTDIR)/var/lib/tpcl-printer-app
+	rm -rf $(DESTDIR)/var/spool/tpcl-printer-app
+	@echo "Uninstallation complete."

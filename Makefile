@@ -18,6 +18,8 @@ all:
 full:
 	@$(MAKE) clean
 	@$(MAKE) pappl-init
+	@echo "Patching PAPPL translations with custom strings..."
+	@./scripts/patch-translations.sh
 	@echo "Rebuilding PAPPL from scratch, keeping config..."
 	@$(MAKE) -C $(PAPPL_DIR) clean
 	@$(MAKE) -C $(PAPPL_DIR)
@@ -31,11 +33,11 @@ pappl-init:
 		git submodule update --init --recursive; \
 	fi
 	@if [ ! -f "$(PAPPL_DIR)/pappl/libpappl.so" ]; then \
+		@echo "Patching PAPPL translations with custom strings..."; \
+		@./scripts/patch-translations.sh; \
 		echo "Configuring and building PAPPL for the first time..."; \
 		cd $(PAPPL_DIR) && ./configure && $(MAKE); \
 	fi
-	@echo "Patching PAPPL translations with custom strings..."
-	@./scripts/patch-translations.sh
 
 # Clean build artifacts
 clean:

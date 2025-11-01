@@ -1,7 +1,4 @@
 *.swp
 *.o
 /bin
-/ppd
-/src_old/rastertotpcl
-/src_old/ppd
-*.raster
+

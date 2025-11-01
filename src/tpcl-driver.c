@@ -369,6 +369,24 @@ tpcl_driver_cb(
   ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "dithering-threshold-default"  , 128);
   driver_data->num_vendor++;
 
+  // - Feed adjustment value (-500 to 500 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
+  driver_data->vendor[driver_data->num_vendor] = "feed-adjustment";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "feed-adjustment-supported", -500, 500);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "feed-adjustment-default"  , 0);
+  driver_data->num_vendor++;
+
+  // - Cut position adjustment value (-180 to 180 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
+  driver_data->vendor[driver_data->num_vendor] = "cut-position-adjustment";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "cut-position-adjustment-supported", -180, 180);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "cut-position-adjustment-default"  , 0);
+  driver_data->num_vendor++;
+
+  // - Backfeed adjustment value (-99 to 99 in 0.1mm units, negative = decrease, positive = increase, 0 = no adjustment)
+  driver_data->vendor[driver_data->num_vendor] = "backfeed-adjustment";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "backfeed-adjustment-supported", -99, 99);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "backfeed-adjustment-default"  , 0);
+  driver_data->num_vendor++;
+
   //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
   //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
 
@@ -1212,8 +1230,116 @@ tpcl_rstartjob_cb(
   papplDevicePuts(device, command);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
-  // Load previous printer state from file if not already loaded
+  // Send feed adjustment command - only send when necessary (when any value != 0)
+  // Get feed adjustment values from vendor options
+  char *feed_adj_str = tpcl_get_vendor_option(options, "feed-adjustment");
+  int feed_adjustment = 0;  // Default: no adjustment
+  if (feed_adj_str)
+  {
+    feed_adjustment = atoi(feed_adj_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from vendor options: %d (0.1mm)", feed_adjustment);
+  }
+
+  char *cut_pos_adj_str = tpcl_get_vendor_option(options, "cut-position-adjustment");
+  int cut_position_adjustment = 0;  // Default: no adjustment
+  if (cut_pos_adj_str)
+  {
+    cut_position_adjustment = atoi(cut_pos_adj_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from vendor options: %d (0.1mm)", cut_position_adjustment);
+  }
+
+  char *backfeed_adj_str = tpcl_get_vendor_option(options, "backfeed-adjustment");
+  int backfeed_adjustment = 0;  // Default: no adjustment
+  if (backfeed_adj_str)
+  {
+    backfeed_adjustment = atoi(backfeed_adj_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from vendor options: %d (0.1mm)", backfeed_adjustment);
+  }
+
+  // Only send AX command if at least one adjustment value is non-zero
+  if (feed_adjustment != 0 || cut_position_adjustment != 0 || backfeed_adjustment != 0)
+  {
+    // Format: {AX;+/-bbb,+/-ddd,+/-ff|}
+    // Feed: negative = forward (-), positive = backward (+)
+    // Cut position: negative = forward (-), positive = backward (+)
+    // Backfeed: negative = decrease (-), positive = increase (+)
+    snprintf(
+      command,
+      sizeof(command),
+      "{AX;%c%03d,%c%03d,%c%02d|}\n",
+      (feed_adjustment >= 0) ? '+' : '-', abs(feed_adjustment),
+      (cut_position_adjustment >= 0) ? '+' : '-', abs(cut_position_adjustment),
+      (backfeed_adjustment >= 0) ? '+' : '-', abs(backfeed_adjustment)
+    );
+    papplDevicePuts(device, command);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustment command: %s", command);
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Skipping AX command - all adjustment values are 0");
+  }
+
+  // Get printer handle for later use
   pappl_printer_t *printer = papplJobGetPrinter(job);
+  if (!printer)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer handle");
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  // Print density adjustment command - only send when print-darkness is not 0
+  // Get print darkness from vendor options (-10 to 10)
+  char *darkness_str = tpcl_get_vendor_option(options, "print-darkness");
+  int print_darkness = 0;  // Default: no adjustment
+  if (darkness_str)
+  {
+    print_darkness = atoi(darkness_str);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from vendor options: %d", print_darkness);
+  }
+
+  // Only send AY command if darkness adjustment is non-zero
+  if (print_darkness != 0)
+  {
+    // Get driver data to determine media type (thermal transfer or direct thermal)
+    pappl_pr_driver_data_t driver_data;
+    if (!papplPrinterGetDriverData(printer, &driver_data))
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data for AY command");
+      tpcl_free_job_buffers(job, tpcl_job);
+      return false;
+    }
+    else
+    {
+      // Determine if using thermal transfer (0) or direct thermal (1)
+      // thermal-transfer* types use 0, direct-thermal uses 1
+      char mode_char = '1';  // Default to direct thermal
+      const char *media_type = driver_data.media_default.type;
+      if (media_type)
+      {
+        if (strncmp(media_type, "thermal-transfer", 16) == 0)
+          mode_char = '0';
+        papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Media type: %s, AY mode: %c", media_type, mode_char);
+      }
+
+      snprintf(
+        command,
+        sizeof(command),
+        "{AY;%c%02d,%c|}\n",
+        (print_darkness >= 0) ? '+' : '-',
+        abs(print_darkness),
+        mode_char
+      );
+      papplDevicePuts(device, command);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
+    }
+  }
+  else
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Skipping AY command - print darkness is 0");
+  }
+
+  // Load previous printer state from file if not already loaded
   if (!g_printer_state.initialized)
   {
     tpcl_load_printer_state(printer, &g_printer_state);
@@ -1325,38 +1451,6 @@ tpcl_rstartjob_cb(
       papplDevicePuts(device, command);
       papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
     }
-  }
-
-  // Send feed adjustment command - TODO only send when necessary; current command format throws error; should be configurable via job options
-  if (false) //feed-on-label-size-change
-  {
-    snprintf(
-      command,
-      sizeof(command),
-      "{AX%04d,%04d,%04d,%04d|}\n",  // TODO "{AX;+00,+00,+00|}\n" 
-      0,
-      0,
-      0,
-      0
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustment command: %s", command);
-  }
-
-  // Print density adjustment command - TODO only send when necessary; untested; should be configurable via job options
-  if (false)
-  {
-    snprintf(
-      command,
-      sizeof(command),
-      "{AY%04d,%04d,%04d,%04d|}\n",  // TODO "{AY;+00,0|}\n"
-      0,
-      0,
-      0,
-      0
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
   }
 
   return true;

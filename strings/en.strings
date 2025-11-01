@@ -7,3 +7,6 @@
 "graphics-mode" = "Data Transmission Mode";
 "dithering-algorithm" = "Dithering Algorithm";
 "dithering-threshold" = "Dithering Threshold";
+"feed-adjustment" = "Feed Adjustment (0.1mm)";
+"cut-position-adjustment" = "Cut Position Adjustment (0.1mm)";
+"backfeed-adjustment" = "Backfeed Adjustment (0.1mm)";

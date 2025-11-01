@@ -244,11 +244,6 @@ void tpcl_delete_cb(
  * Support functions
  */
 
-char* tpcl_get_vendor_option(
-  pappl_pr_options_t       *options,
-  const char               *key
-);
-
 static void tpcl_free_job_buffers(
   pappl_job_t              *job,
   tpcl_job_t               *tpcl_job
@@ -1079,18 +1074,41 @@ tpcl_rstartjob_cb(
 
   char command[256];
 
+  // Get printer handle for IPP attribute access
+  pappl_printer_t *printer = papplJobGetPrinter(job);
+  if (!printer)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer handle");
+    return false;
+  }
+
+  // Get printer IPP attributes for vendor options
+  ipp_t *printer_attrs = papplPrinterGetDriverAttributes(printer);
+  if (!printer_attrs)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer attributes");
+    return false;
+  }
+
   // Allocate and set the per-job driver data pointer
   tpcl_job_t *tpcl_job;
   tpcl_job = (tpcl_job_t *)calloc(1, sizeof(tpcl_job_t));
   if (!tpcl_job)
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate job data structure");
+    ippDelete(printer_attrs);
     return false;
   }
   papplJobSetData(job, tpcl_job);
 
   // Set graphics mode from vendor options
-  char *graphics_mode = tpcl_get_vendor_option(options, "graphics-mode");
+  const char *graphics_mode = NULL;
+  ipp_attribute_t *graphics_mode_attr = ippFindAttribute(printer_attrs, "graphics-mode-default", IPP_TAG_KEYWORD);
+  if (graphics_mode_attr)
+  {
+    graphics_mode = ippGetString(graphics_mode_attr, 0, NULL);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved graphics mode from printer settings: %s", graphics_mode);
+  }
   if (graphics_mode)
   {
     if (strcmp(graphics_mode, "nibble-and") == 0)
@@ -1138,6 +1156,7 @@ tpcl_rstartjob_cb(
     {
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate TOPIX compression buffers");
       tpcl_free_job_buffers(job, tpcl_job);
+      ippDelete(printer_attrs);
       return false;
     }
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "TOPIX buffers allocated: line=%u bytes, comp=65535 bytes", options->header.cupsBytesPerLine);
@@ -1151,6 +1170,7 @@ tpcl_rstartjob_cb(
     {
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to allocate line buffer for HEX / Nibble mode");
       tpcl_free_job_buffers(job, tpcl_job);
+      ippDelete(printer_attrs);
       return false;
     }
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "HEX mode buffer allocated: line=%u bytes", options->header.cupsBytesPerLine);
@@ -1161,26 +1181,26 @@ tpcl_rstartjob_cb(
   tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print width (0.1mm)
   tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print height (0.1mm)
 
-  // Get label gap from vendor options (0.1mm)
-  char *gap_str = tpcl_get_vendor_option(options, "label-gap");
+  // Get label gap from printer settings (0.1mm)
   int label_gap = 50;  // Default: 5mm
-  if (gap_str)
+  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
+  if (gap_attr)
   {
-    label_gap = atoi(gap_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from vendor options: %d (0.1mm)", label_gap);
+    label_gap = ippGetInteger(gap_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_gap);
   }
   else
   {
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
   }
 
-  // Get roll margin from vendor options (0.1mm)
-  char *margin_str = tpcl_get_vendor_option(options, "roll-margin");
+  // Get roll margin from printer settings (0.1mm)
   int roll_margin = 10;  // Default: 1mm
-  if (margin_str)
+  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
+  if (margin_attr)
   {
-    roll_margin = atoi(margin_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from vendor options: %d (0.1mm)", roll_margin);
+    roll_margin = ippGetInteger(margin_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_margin);
   }
   else
   {
@@ -1207,6 +1227,7 @@ tpcl_rstartjob_cb(
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Label pitch %d (0.1mm) exceeds maximum %d (0.1mm) for %udpi resolution", tpcl_job->label_pitch, max_pitch, options->header.HWResolution[1]);
     tpcl_free_job_buffers(job, tpcl_job);
+    ippDelete(printer_attrs);
     return false;
   }
 
@@ -1214,6 +1235,7 @@ tpcl_rstartjob_cb(
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Print height %d (0.1mm) exceeds maximum %d (0.1mm) for %udpi resolution", tpcl_job->print_height, max_height, options->header.HWResolution[1]);
     tpcl_free_job_buffers(job, tpcl_job);
+    ippDelete(printer_attrs);
     return false;
   }
 
@@ -1231,29 +1253,29 @@ tpcl_rstartjob_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
   // Send feed adjustment command - only send when necessary (when any value != 0)
-  // Get feed adjustment values from vendor options
-  char *feed_adj_str = tpcl_get_vendor_option(options, "feed-adjustment");
+  // Get feed adjustment values from printer settings
   int feed_adjustment = 0;  // Default: no adjustment
-  if (feed_adj_str)
+  ipp_attribute_t *feed_adj_attr = ippFindAttribute(printer_attrs, "feed-adjustment-default", IPP_TAG_INTEGER);
+  if (feed_adj_attr)
   {
-    feed_adjustment = atoi(feed_adj_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from vendor options: %d (0.1mm)", feed_adjustment);
+    feed_adjustment = ippGetInteger(feed_adj_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from printer settings: %d (0.1mm)", feed_adjustment);
   }
 
-  char *cut_pos_adj_str = tpcl_get_vendor_option(options, "cut-position-adjustment");
   int cut_position_adjustment = 0;  // Default: no adjustment
-  if (cut_pos_adj_str)
+  ipp_attribute_t *cut_pos_adj_attr = ippFindAttribute(printer_attrs, "cut-position-adjustment-default", IPP_TAG_INTEGER);
+  if (cut_pos_adj_attr)
   {
-    cut_position_adjustment = atoi(cut_pos_adj_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from vendor options: %d (0.1mm)", cut_position_adjustment);
+    cut_position_adjustment = ippGetInteger(cut_pos_adj_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from printer settings: %d (0.1mm)", cut_position_adjustment);
   }
 
-  char *backfeed_adj_str = tpcl_get_vendor_option(options, "backfeed-adjustment");
   int backfeed_adjustment = 0;  // Default: no adjustment
-  if (backfeed_adj_str)
+  ipp_attribute_t *backfeed_adj_attr = ippFindAttribute(printer_attrs, "backfeed-adjustment-default", IPP_TAG_INTEGER);
+  if (backfeed_adj_attr)
   {
-    backfeed_adjustment = atoi(backfeed_adj_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from vendor options: %d (0.1mm)", backfeed_adjustment);
+    backfeed_adjustment = ippGetInteger(backfeed_adj_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from printer settings: %d (0.1mm)", backfeed_adjustment);
   }
 
   // Only send AX command if at least one adjustment value is non-zero
@@ -1279,23 +1301,14 @@ tpcl_rstartjob_cb(
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Skipping AX command - all adjustment values are 0");
   }
 
-  // Get printer handle for later use
-  pappl_printer_t *printer = papplJobGetPrinter(job);
-  if (!printer)
-  {
-    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer handle");
-    tpcl_free_job_buffers(job, tpcl_job);
-    return false;
-  }
-
   // Print density adjustment command - only send when print-darkness is not 0
-  // Get print darkness from vendor options (-10 to 10)
-  char *darkness_str = tpcl_get_vendor_option(options, "print-darkness");
+  // Get print darkness from printer settings (-10 to 10)
   int print_darkness = 0;  // Default: no adjustment
-  if (darkness_str)
+  ipp_attribute_t *darkness_attr = ippFindAttribute(printer_attrs, "print-darkness-default", IPP_TAG_INTEGER);
+  if (darkness_attr)
   {
-    print_darkness = atoi(darkness_str);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from vendor options: %d", print_darkness);
+    print_darkness = ippGetInteger(darkness_attr, 0);
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from printer settings: %d", print_darkness);
   }
 
   // Only send AY command if darkness adjustment is non-zero
@@ -1307,6 +1320,7 @@ tpcl_rstartjob_cb(
     {
       papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data for AY command");
       tpcl_free_job_buffers(job, tpcl_job);
+      ippDelete(printer_attrs);
       return false;
     }
     else
@@ -1379,7 +1393,12 @@ tpcl_rstartjob_cb(
   tpcl_save_printer_state(printer, &g_printer_state);
 
   // If label size changed and feed-on-label-size-change is enabled, send feed command
-  char *feed_on_change_str = tpcl_get_vendor_option(options, "feed-on-label-size-change");
+  const char *feed_on_change_str = NULL;
+  ipp_attribute_t *feed_on_change_attr = ippFindAttribute(printer_attrs, "feed-on-label-size-change-default", IPP_TAG_KEYWORD);
+  if (feed_on_change_attr)
+  {
+    feed_on_change_str = ippGetString(feed_on_change_attr, 0, NULL);
+  }
   bool should_feed = label_size_changed && feed_on_change_str && (strcmp(feed_on_change_str, "yes") == 0);
 
   if (should_feed)
@@ -1396,9 +1415,11 @@ tpcl_rstartjob_cb(
     {
       // a: Sensor type (0=none, 1=reflective, 2=transmissive)
       char sensor_char = '2';
-      char *sensor_type = tpcl_get_vendor_option(options, "sensor-type");
-      if (sensor_type)
+      const char *sensor_type = NULL;
+      ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
+      if (sensor_type_attr)
       {
+        sensor_type = ippGetString(sensor_type_attr, 0, NULL);
         if (strcmp(sensor_type, "none") == 0)
           sensor_char = '0';
         else if (strcmp(sensor_type, "reflective") == 0)
@@ -1407,15 +1428,22 @@ tpcl_rstartjob_cb(
 
       // b: Cut selection (0=non-cut, 1=cut)
       char cut_char = '0';
-      char *cut_type = tpcl_get_vendor_option(options, "label-cut");
-      if (cut_type && strcmp(cut_type, "cut") == 0)
-        cut_char = '1';
+      const char *cut_type = NULL;
+      ipp_attribute_t *cut_type_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
+      if (cut_type_attr)
+      {
+        cut_type = ippGetString(cut_type_attr, 0, NULL);
+        if (strcmp(cut_type, "cut") == 0)
+          cut_char = '1';
+      }
 
       // c: Feed mode (C=batch, D=strip, F=partial-cut)
       char feed_mode_char = 'C';
-      char *feed_mode = tpcl_get_vendor_option(options, "feed-mode");
-      if (feed_mode)
+      const char *feed_mode = NULL;
+      ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
+      if (feed_mode_attr)
       {
+        feed_mode = ippGetString(feed_mode_attr, 0, NULL);
         if (strcmp(feed_mode, "strip") == 0)
           feed_mode_char = 'D';
         else if (strcmp(feed_mode, "partial-cut") == 0)
@@ -1453,6 +1481,7 @@ tpcl_rstartjob_cb(
     }
   }
 
+  ippDelete(printer_attrs);
   return true;
 }
 
@@ -1487,7 +1516,7 @@ tpcl_rstartpage_cb(
 
   // Clear image buffer command
   papplDevicePuts(device, "{C|}\n");
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: {C|}\n");
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: {C|}");
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -1899,33 +1928,6 @@ void tpcl_delete_cb(
   }
 
   return;
-}
-
-
-/*
- * 'tpcl_get_vendor_option()' - Read a custom vendor option
- *
- * Returns a setting value as string, if found, else NULL for the requested key.
- */
-
-char* tpcl_get_vendor_option(
-  pappl_pr_options_t       *options,
-  const char               *key
-)
-{
-  if (!options || !key)
-  {
-    return NULL;
-  }
-
-  for (int i = 0; i < options->num_vendor; i++)
-  {
-    if (!strcmp(options->vendor[i].name, key))
-    {
-      return options->vendor[i].value;
-    }
-  }
-  return NULL;
 }
 
 

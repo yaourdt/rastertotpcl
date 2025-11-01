@@ -15,7 +15,6 @@
 // TODO: Implement testpage callback
 // TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
-// TODO POINTS_PER_INCH, MM_PER_INCH in all source
 // TODO printer icons
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
 // TODO AY and AX commands
@@ -1140,9 +1139,9 @@ tpcl_rstartjob_cb(
   }
 
   // Calculate label dimensions from page size
-  // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 254 / 72
-  tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * 254.0 / 72.0);  // Effective print width (0.1mm)
-  tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * 254.0 / 72.0);  // Effective print height (0.1mm)
+  // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 25.4 * 10 / 72
+  tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print width (0.1mm)
+  tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print height (0.1mm)
 
   // Get label gap from vendor options (0.1mm)
   char *gap_str = tpcl_get_vendor_option(options, "label-gap");
@@ -1175,7 +1174,7 @@ tpcl_rstartjob_cb(
   tpcl_job->roll_width  = tpcl_job->print_width + roll_margin;
 
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / 72), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / 72));
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / POINTS_PER_INCH), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / POINTS_PER_INCH));
 
   // Calculate buffer length in bytes as sent to printer
   tpcl_job->buffer_len = options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel;
@@ -1631,7 +1630,7 @@ tpcl_rwriteline_cb(
       ssize_t bytes_written = tpcl_topix_output_buffer(options, device, tpcl_job);
 
       // Y offset for next image in 0.1mm (for TOPIX)
-      tpcl_job->y_offset = (y + 1) * 254 / options->header.HWResolution[0];
+      tpcl_job->y_offset = (int) (y + 1) * MM_PER_INCH * 10.0 / options->header.HWResolution[0];
 
       papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer flushed, %lu bytes sent. Y offset for next image: %d (0.1mm)", y, bytes_written, tpcl_job->y_offset);
     }

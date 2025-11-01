@@ -13,6 +13,10 @@
 // TODO: Implement testpage callback
 // TODO set IPP attributes
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
+// TODO "Randlos offset" in den medieneinstellungen
+// Print testpage: 25-11-01T19:21:40.294Z] [Printer toshibalabel] No previous state file found at /var/cache/tpcl-printer-app/toshibalabel.state
+//D [2025-11-01T19:21:40.294Z] [Printer toshibalabel] No previous label dimensions found
+// Path of state file nochmals abgleichen
 
 #include "tpcl-driver.h"
 #include "dithering.h"
@@ -2031,7 +2035,14 @@ tpcl_rendjob_cb(
 /*
  * 'tpcl_testpage_cb()' - Print test file callback
  *
- * Currently not implemented, just returns NULL. TODO
+ * Generates TPCL commands to print a test page:
+ *   1. D  - Set label size
+ *   2. AX - Feed adjustment (only if values are non-zero)
+ *   3. AY - Print density (only if darkness is non-zero)
+ *   4. T  - Feed paper (only if label size changed)
+ *   5. C  - Clear buffer
+ *   6. LC - Line format command 
+ *   7. XS - Issue label
  */
 
 const char* tpcl_testpage_cb(
@@ -2040,7 +2051,406 @@ const char* tpcl_testpage_cb(
   size_t                   bufsize
 )
 {
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Test file printing currently not implemented");
+  pappl_device_t           *device;                      // Printer device connection
+  pappl_pr_driver_data_t   driver_data;                  // Driver data
+  char                     command[256];                 // Command buffer
+  int                      print_width;                  // Effective print width (0.1mm)
+  int                      print_height;                 // Effective print height (0.1mm)
+  int                      label_pitch;                  // Label pitch with gap (0.1mm)
+  int                      roll_width;                   // Full roll width (0.1mm)
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Printing test page");
+
+  // Open connection to the printer device
+  device = papplPrinterOpenDevice(printer);
+  if (!device)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open device connection for test page");
+    return NULL;
+  }
+
+  // Get driver data to access media settings
+  if (!papplPrinterGetDriverData(printer, &driver_data))
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data");
+    papplPrinterCloseDevice(printer);
+    return NULL;
+  }
+
+  // Calculate dimensions from media_default (convert hundredths of mm to tenths of mm)
+  print_width  = driver_data.media_default.size_width / 10;   // Effective print width
+  print_height = driver_data.media_default.size_length / 10;  // Effective print height
+
+  // Get printer IPP attributes for vendor options
+  ipp_t *printer_attrs = papplPrinterGetDriverAttributes(printer);
+  if (!printer_attrs)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to get printer attributes");
+    papplPrinterCloseDevice(printer);
+    return NULL;
+  }
+
+  // Get label gap from printer settings (0.1mm)
+  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
+  if (gap_attr)
+  {
+    label_pitch = print_height + ippGetInteger(gap_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_pitch - print_height);
+  }
+  else
+  {
+    label_pitch = print_height + 50;
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
+  }
+
+  // Get roll margin from printer settings (0.1mm)
+  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
+  if (margin_attr)
+  {
+    roll_width = print_width + ippGetInteger(margin_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_width - print_width);
+  }
+  else
+  {
+    roll_width  = print_width + 10;
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
+  }
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
+
+  // Send label size command
+  snprintf(
+    command,
+    sizeof(command),
+    "{D%04d,%04d,%04d,%04d|}\n",
+    label_pitch,
+    print_width,
+    print_height,
+    roll_width
+  );
+  papplDevicePuts(device, command);
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
+
+  // 2. AX command - Feed adjustment (only if values are non-zero)
+  int feed_adjustment = 0;
+  ipp_attribute_t *feed_adj_attr = ippFindAttribute(printer_attrs, "feed-adjustment-default", IPP_TAG_INTEGER);
+  if (feed_adj_attr)
+  {
+    feed_adjustment = ippGetInteger(feed_adj_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from printer settings: %d (0.1mm)", feed_adjustment);
+  }
+
+  int cut_position_adjustment = 0;
+  ipp_attribute_t *cut_pos_adj_attr = ippFindAttribute(printer_attrs, "cut-position-adjustment-default", IPP_TAG_INTEGER);
+  if (cut_pos_adj_attr)
+  {
+    cut_position_adjustment = ippGetInteger(cut_pos_adj_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from printer settings: %d (0.1mm)", cut_position_adjustment);
+  }
+
+  int backfeed_adjustment = 0;
+  ipp_attribute_t *backfeed_adj_attr = ippFindAttribute(printer_attrs, "backfeed-adjustment-default", IPP_TAG_INTEGER);
+  if (backfeed_adj_attr)
+  {
+    backfeed_adjustment = ippGetInteger(backfeed_adj_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from printer settings: %d (0.1mm)", backfeed_adjustment);
+  }
+
+  // Only send AX command if at least one adjustment value is non-zero
+  if (feed_adjustment != 0 || cut_position_adjustment != 0 || backfeed_adjustment != 0)
+  {
+    snprintf(
+      command,
+      sizeof(command),
+      "{AX;%c%03d,%c%03d,%c%02d|}\n",
+      (feed_adjustment >= 0) ? '+' : '-', abs(feed_adjustment),
+      (cut_position_adjustment >= 0) ? '+' : '-', abs(cut_position_adjustment),
+      (backfeed_adjustment >= 0) ? '+' : '-', abs(backfeed_adjustment)
+    );
+    papplDevicePuts(device, command);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustment command: %s", command);
+  }
+  else
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Skipping AX command - all adjustment values are 0");
+  }
+
+  // 3. AY command - Print density (only if darkness is non-zero)
+  int print_darkness = 0;
+  ipp_attribute_t *darkness_attr = ippFindAttribute(printer_attrs, "print-darkness-default", IPP_TAG_INTEGER);
+  if (darkness_attr)
+  {
+    print_darkness = ippGetInteger(darkness_attr, 0);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from printer settings: %d", print_darkness);
+  }
+
+  // Only send AY command if darkness adjustment is non-zero
+  if (print_darkness != 0)
+  {
+    // Determine if using thermal transfer (0) or direct thermal (1)
+    char mode_char = '1';  // Default to direct thermal
+    const char *media_type = driver_data.media_default.type;
+    if (media_type)
+    {
+      if (strncmp(media_type, "thermal-transfer", 16) == 0)
+        mode_char = '0';
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Media type: %s, AY mode: %c", media_type, mode_char);
+    }
+
+    snprintf(
+      command,
+      sizeof(command),
+      "{AY;%c%02d,%c|}\n",
+      (print_darkness >= 0) ? '+' : '-',
+      abs(print_darkness),
+      mode_char
+    );
+    papplDevicePuts(device, command);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
+  }
+  else
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Skipping AY command - print darkness is 0");
+  }
+
+  // 4. T command - Feed paper (only if label size changed from previous state)
+  tpcl_printer_state_t state;
+  bool label_size_changed = false;
+
+  if (tpcl_load_printer_state(printer, &state))
+  {
+    if (state.last_print_width != print_width ||
+        state.last_print_height != print_height ||
+        state.last_label_gap != (label_pitch - print_height) ||
+        state.last_roll_margin != (roll_width - print_width))
+    {
+      label_size_changed = true;
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Label size changed: old(%d×%d+%d/%d) → new(%d×%d+%d/%d) [width×height+gap/margin in 0.1mm]",
+        state.last_print_width, state.last_print_height,
+        state.last_label_gap, state.last_roll_margin,
+        print_width, print_height, label_pitch - print_height, roll_width - print_width);
+    }
+  }
+  else
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No previous label dimensions found");
+    label_size_changed = true;
+  }
+
+  // Check if feed-on-label-size-change is enabled
+  const char *feed_on_change_str = NULL;
+  ipp_attribute_t *feed_on_change_attr = ippFindAttribute(printer_attrs, "feed-on-label-size-change-default", IPP_TAG_KEYWORD);
+  if (feed_on_change_attr)
+  {
+    feed_on_change_str = ippGetString(feed_on_change_attr, 0, NULL);
+  }
+  bool should_feed = label_size_changed && feed_on_change_str && (strcmp(feed_on_change_str, "yes") == 0);
+
+  if (should_feed)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Label size changed and feed-on-label-size-change is enabled, sending feed command");
+
+    // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+    char sensor_char = '2';
+    ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
+    if (sensor_attr)
+    {
+      const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
+      if (strcmp(sensor_type, "none") == 0)
+        sensor_char = '0';
+      else if (strcmp(sensor_type, "reflective") == 0)
+        sensor_char = '1';
+    }
+
+    // b: Cut selection (0=non-cut, 1=cut)
+    char cut_char = '0';
+    ipp_attribute_t *cut_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
+    if (cut_attr)
+    {
+      const char *cut_type = ippGetString(cut_attr, 0, NULL);
+      if (strcmp(cut_type, "cut") == 0)
+        cut_char = '1';
+    }
+
+    // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
+    char feed_mode_char = 'C';
+    ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
+    if (feed_mode_attr)
+    {
+      const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
+      if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
+        feed_mode_char = 'D';
+      else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+        feed_mode_char = 'E';
+      else if (strcmp(feed_mode, "partial-cut") == 0)
+        feed_mode_char = 'F';
+    }
+
+    // d: Feed speed (use default speed from driver data as hex char)
+    char speed_char = '0' + driver_data.speed_default;
+    if (driver_data.speed_default > 9)
+      speed_char = 'A' + (driver_data.speed_default - 10);
+
+    // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+    char ribbon_char = '0';
+    const char *media_type = driver_data.media_default.type;
+    if (media_type)
+    {
+      if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
+        ribbon_char = '1';
+      else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
+        ribbon_char = '2';
+    }
+
+    snprintf(
+      command,
+      sizeof(command),
+      "{T%c%c%c%c%c|}\n",
+      sensor_char,
+      cut_char,
+      feed_mode_char,
+      speed_char,
+      ribbon_char
+    );
+    papplDevicePuts(device, command);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+  }
+
+  // Send clear image buffer command
+  snprintf(command, sizeof(command), "{C|}\n");
+  papplDevicePuts(device, command);
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: %s", command);
+
+  // 6. LC command - Line format command - draw concentric boxes
+  int box_spacing = 45;                                  // Spacing between boxes in 0.1mm
+  int min_dimension = 50;                                // Minimum Box dimension in 0.1mm
+
+  // Calculate line width in dots based on resolution
+  // Assuming 203dpi: 0.5mm = 0.5 / 25.4 * 203 ≈ 4 dots
+  // Assuming 300dpi: 0.5mm = 0.5 / 25.4 * 300 ≈ 6 dots
+  int line_width_dots = (driver_data.y_default == 300) ? 6 : 4;
+
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Drawing concentric boxes: spacing=%d, line_width_dots=%d", box_spacing, line_width_dots);
+
+  // Draw boxes from largest (full label) to smallest
+  int box_num = 0;
+  for (int offset = 0; ; offset += box_spacing, box_num++)
+  {
+    // Calculate box dimensions
+    int x1 = offset;
+    int y1 = offset;
+    int x2 = print_width - offset;
+    int y2 = print_height - offset;
+
+    // Calculate box size
+    int box_width = x2 - x1;
+    int box_height = y2 - y1;
+
+    // Stop if box would be too small
+    if (box_width < min_dimension || box_height < min_dimension)
+    {
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Stopping box drawing: box %d would be %dx%d (min=%d)",
+        box_num, box_width, box_height, min_dimension);
+      break;
+    }
+
+    // Draw the box using LC command
+    // {LC;aaaa,bbbb,cccc,dddd,e,f|}
+    // e=1 for rectangle, f=line width in dots
+    snprintf(
+      command,
+      sizeof(command),
+      "{LC;%04d,%04d,%04d,%04d,1,%d|}\n",
+      x1,
+      y1,
+      x2,
+      y2,
+      line_width_dots
+    );
+    papplDevicePuts(device, command);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending LC command for box %d: %s", box_num, command);
+  }
+
+  // 7. XS command - Issue label
+  int num_copies = 1;
+
+  // bbb: Cut interval (000 to 100, 000 = no cut)
+  int cut_interval = 0;
+  ipp_attribute_t *cut_interval_attr = ippFindAttribute(printer_attrs, "cut-interval-default", IPP_TAG_INTEGER);
+  if (cut_interval_attr)
+  {
+    cut_interval = ippGetInteger(cut_interval_attr, 0);
+  }
+
+  // c: Type of sensor (0=none, 1=reflective, 2=transmissive)
+  char sensor_char = '2';
+  ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
+  if (sensor_attr)
+  {
+    const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
+    if (strcmp(sensor_type, "none") == 0)
+      sensor_char = '0';
+    else if (strcmp(sensor_type, "reflective") == 0)
+      sensor_char = '1';
+  }
+
+  // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
+  char feed_mode_char = 'C';
+  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
+  if (feed_mode_attr)
+  {
+    const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
+    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
+      feed_mode_char = 'D';
+    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+      feed_mode_char = 'E';
+    else if (strcmp(feed_mode, "partial-cut") == 0)
+      feed_mode_char = 'F';
+  }
+
+  // e: Issue speed (use default speed from driver data as hex char)
+  char speed_char = '0' + driver_data.speed_default;
+  if (driver_data.speed_default > 9)
+    speed_char = 'A' + (driver_data.speed_default - 10);
+
+  // f: With/without ribbon (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+  char ribbon_char = '0';
+  const char *media_type = driver_data.media_default.type;
+  if (media_type)
+  {
+    if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
+      ribbon_char = '1';
+    else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
+      ribbon_char = '2';
+  }
+
+  // g: Tag rotation (0 = no rotation)
+  char rotation_char = '0';
+
+  // h: Type of status response (0 = not needed)
+  char status_response_char = '0';
+
+  snprintf(
+    command,
+    sizeof(command),
+    "{XS;I,%04d,%03d%c%c%c%c%c%c|}\n",
+    num_copies,
+    cut_interval,
+    sensor_char,
+    feed_mode_char,
+    speed_char,
+    ribbon_char,
+    rotation_char,
+    status_response_char
+  );
+  papplDevicePuts(device, command);
+  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending issue label command: %s", command);
+
+  papplDeviceFlush(device);
+
+  ippDelete(printer_attrs);
+  papplPrinterCloseDevice(printer);
+
   return NULL;
 }
 

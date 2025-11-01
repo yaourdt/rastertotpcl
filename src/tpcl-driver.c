@@ -11,7 +11,6 @@
  * Licensed under GNU GPL v3.
  */
 // TODO: Implement testpage callback
-// TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
 
@@ -682,48 +681,107 @@ tpcl_status_cb(
     {
       printer_ready = true;
       papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Printer ready (status: %s)", status_code);
+      // Clear all error reasons when printer is ready
+      papplPrinterSetReasons(printer, PAPPL_PREASON_NONE, PAPPL_PREASON_DEVICE_STATUS);
     }
     else
     {
-      // Log specific error conditions based on status code
+      // Log specific error conditions based on status code and update PAPPL reasons
       if (strcmp(status_code, "01") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Top cover open");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_COVER_OPEN, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "03") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Exclusively accessed by other host");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "04") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Paused");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "05") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Waiting for stripping");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "06") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Command error");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "07") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "RS-232C error");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "11") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Paper jam");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_MEDIA_JAM, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "12") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Paper jam at cutter");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_MEDIA_JAM, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "13") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "The label has run out");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_MEDIA_EMPTY, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "15") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Feed attempt while cover open");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_COVER_OPEN, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "16") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Steeping motor overheat");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "18") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Thermal head overheat");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "21") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "The ribbon has run out");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_MARKER_SUPPLY_EMPTY, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "23") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Print succeeded. The label has run out");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_MEDIA_EMPTY, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "50") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "SD card write error");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "51") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "SD card format error");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "54") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "SD card full");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_SPOOL_AREA_FULL, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else if (strcmp(status_code, "55") == 0)
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "PC command mode / initialize SD / EEPROM error");
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
       else
+      {
         papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Unknown status code: %s", status_code);
+        papplPrinterSetReasons(printer, PAPPL_PREASON_OTHER, PAPPL_PREASON_DEVICE_STATUS);
+      }
     }
   }
   else

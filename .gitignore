@@ -1,4 +1,5 @@
 *.swp
 *.o
 /bin
+/src/icon-*.h
 

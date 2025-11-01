@@ -13,16 +13,13 @@
 // TODO: Implement testpage callback
 // TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
-// TODO printer icons
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
 
-/*
-Printer toshibalabel] Driver provides small-48x48 icon in file '../assets/icon-b-ev4d-64.png'.
-D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides medium-128x128 icon in file '../assets/icon-b-ev4d-128.png'.
-D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides large-512x512 icon in file '../assets/icon-b-ev4d-256.png'.
-*/
 #include "tpcl-driver.h"
 #include "dithering.h"
+#include "icon-48.h"
+#include "icon-128.h"
+#include "icon-512.h"
 #include <math.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -410,18 +407,18 @@ tpcl_driver_cb(
     dither_threshold16(driver_data->pdither, (unsigned char)dither_threshold);
   }
 
-  // Printer icons - 64x64, 128x128, and 256x256 pixel sizes
-  strncpy(driver_data->icons[0].filename, "../assets/icon-b-ev4d-64.png", sizeof(driver_data->icons[0].filename) - 1);
-  driver_data->icons[0].data = NULL;
-  driver_data->icons[0].datalen = 0;
+  // Printer icons - 48x48, 128x128, and 512x512 pixel sizes (embedded)
+  driver_data->icons[0].filename[0] = '\0';
+  driver_data->icons[0].data = icon_48_png_data;
+  driver_data->icons[0].datalen = icon_48_png_size;
 
-  strncpy(driver_data->icons[1].filename, "../assets/icon-b-ev4d-128.png", sizeof(driver_data->icons[1].filename) - 1);
-  driver_data->icons[1].data = NULL;
-  driver_data->icons[1].datalen = 0;
+  driver_data->icons[1].filename[0] = '\0';
+  driver_data->icons[1].data = icon_128_png_data;
+  driver_data->icons[1].datalen = icon_128_png_size;
 
-  strncpy(driver_data->icons[2].filename, "../assets/icon-b-ev4d-256.png", sizeof(driver_data->icons[2].filename) - 1);
-  driver_data->icons[2].data = NULL;
-  driver_data->icons[2].datalen = 0;
+  driver_data->icons[2].filename[0] = '\0';
+  driver_data->icons[2].data = icon_512_png_data;
+  driver_data->icons[2].datalen = icon_512_png_size;
 
   driver_data->format = "application/vnd.toshiba-tpcl";  // Native file format
   driver_data->ppm = 10;                                 // Pages per minute (guesstimate)

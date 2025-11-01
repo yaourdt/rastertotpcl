@@ -11,6 +11,10 @@ PAPPL_DIR = external/pappl
 # Default target: build the application
 all:
 	@$(MAKE) pappl-init
+	@if [ ! -f "$(SRCDIR)/icon-48.h" ] || [ ! -f "$(SRCDIR)/icon-128.h" ] || [ ! -f "$(SRCDIR)/icon-512.h" ]; then \
+		echo "Generating missing icon headers..."; \
+		./scripts/generate-icon-headers.sh; \
+	fi
 	@mkdir -p $(BINDIR)
 	@$(MAKE) -C $(SRCDIR) all
 
@@ -20,6 +24,8 @@ full:
 	@$(MAKE) pappl-init
 	@echo "Patching PAPPL translations with custom strings..."
 	@./scripts/patch-translations.sh
+	@echo "Generating embedded icon headers..."
+	@./scripts/generate-icon-headers.sh
 	@echo "Rebuilding PAPPL from scratch, keeping config..."
 	@$(MAKE) -C $(PAPPL_DIR) clean
 	@$(MAKE) -C $(PAPPL_DIR)
@@ -44,6 +50,7 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@$(MAKE) -C $(SRCDIR) clean
 	@rm -rf $(BINDIR)
+	@rm -f $(SRCDIR)/icon-*.h
 	@echo "Clean complete."
 
 # Install the application to system directories

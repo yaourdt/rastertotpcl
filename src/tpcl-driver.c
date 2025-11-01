@@ -11,7 +11,6 @@
  * Licensed under GNU GPL v3.
  */
 // TODO: Persist previous page size between job runs to use (T)
-// TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
 
 // TODO: Implement testpage callback
 // TODO: Propper error handling wie zB Deckel offen
@@ -24,6 +23,10 @@
 // TODO AY and AX commands
 
 /*
+Printer toshibalabel] Driver provides small-48x48 icon in file '../assets/icon-b-ev4d-64.png'.
+D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides medium-128x128 icon in file '../assets/icon-b-ev4d-128.png'.
+D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides large-512x512 icon in file '../assets/icon-b-ev4d-256.png'.
+
 I [2025-11-01T08:29:13.228Z] [Printer toshibalabel] Printer identification triggered: Eject one label
 D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved label gap from printer settings: 50 (0.1mm)
 D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved roll margin from printer settings: 0 (0.1mm)
@@ -101,7 +104,7 @@ const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
 #define TPCL_PRNT_SPEED 3
 
 typedef struct {
-    const char             *name;                        // Name, must be equal to name in 'tpcl_drivers[]'
+    const char             *name;                        // Name, equal to name in 'tpcl_drivers[]', only used for human reference
     int                    print_min_width;              // Minimum label width in x direction in points (1 point = 1/72 inch)
     int                    print_min_height;             // Minimum label length in y direction in points
     int                    print_max_width;              // Maximum label width in x direction in points
@@ -497,11 +500,15 @@ tpcl_driver_cb(
         return false;
       }
       
-      // Available printing speeds
-      driver_data->speed_supported[0] = tpcl_printer_properties[i].print_speeds[0]; // Min
-      driver_data->speed_default      = tpcl_printer_properties[i].print_speeds[1]; // Default
-      driver_data->speed_supported[1] = tpcl_printer_properties[i].print_speeds[2]; // Max
-      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Print speed settings: min=%d, default=%d, max=%d", driver_data->speed_supported[0], driver_data->speed_default, driver_data->speed_supported[1]); 
+      // Available printing speeds (workaround due to PAPPL web interface limitations)
+      driver_data->speed_supported[0] = 0;               // Min
+      driver_data->speed_supported[1] = 0;               // Max
+      driver_data->speed_default      = 0;               // Default
+      driver_data->vendor[driver_data->num_vendor] = "print-speed";
+      ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "print-speed-supported", tpcl_printer_properties[i].print_speeds[0], tpcl_printer_properties[i].print_speeds[2]);
+      ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "print-speed-default", tpcl_printer_properties[i].print_speeds[1]);
+      driver_data->num_vendor++;
+      papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Print speed settings: min=%d, default=%d, max=%d", tpcl_printer_properties[i].print_speeds[0], tpcl_printer_properties[i].print_speeds[1], tpcl_printer_properties[i].print_speeds[2]); 
 
       // Supported media (label) sizes. We use roll media for label printers, which allows any size within range
       driver_data->num_media = 2;                        // Number of supported media

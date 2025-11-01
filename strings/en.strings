@@ -2,7 +2,12 @@
 "roll-margin" = "Horizontal Roll Margin (0.1mm)";
 "sensor-type" = "Sensor Type";
 "label-cut" = "Cut label?";
+"cut-interval" = "Cut Interval (labels)";
 "feed-mode" = "Feed Mode";
+"feed-mode.batch" = "Batch Mode";
+"feed-mode.strip-backfeed-sensor" = "Strip Mode (Backfeed with Sensor)";
+"feed-mode.strip-backfeed-no-sensor" = "Strip Mode (Backfeed without Sensor)";
+"feed-mode.partial-cut" = "Partial Cut Mode";
 "feed-on-label-size-change" = "Feed on Label Size Change?";
 "graphics-mode" = "Data Transmission Mode";
 "dithering-algorithm" = "Dithering Algorithm";

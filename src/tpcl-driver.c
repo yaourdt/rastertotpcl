@@ -334,9 +334,15 @@ tpcl_driver_cb(
   ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-default", NULL, "non-cut");
   driver_data->num_vendor++;
 
+  // - Cut interval (number of labels before cutting, 0=no cut, 1-100)
+  driver_data->vendor[driver_data->num_vendor] = "cut-interval";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "cut-interval-supported", 0, 100);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "cut-interval-default"  , 0);
+  driver_data->num_vendor++;
+
   // - Feed mode selection
   driver_data->vendor[driver_data->num_vendor] = "feed-mode";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 3, NULL, (const char *[]){"batch", "strip", "partial-cut"});
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 4, NULL, (const char *[]){"batch", "strip-backfeed-sensor", "strip-backfeed-no-sensor", "partial-cut"});
   ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-default", NULL, "batch");
   driver_data->num_vendor++;
 
@@ -889,14 +895,16 @@ void tpcl_identify_cb(
       cut_char = '1';
   }
 
-  // c: Feed mode (C=batch, D=strip, F=partial-cut)
+  // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
   char feed_mode_char = 'C';
   ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
   if (feed_mode_attr)
   {
     const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-    if (strcmp(feed_mode, "strip") == 0)
+    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
       feed_mode_char = 'D';
+    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+      feed_mode_char = 'E';
     else if (strcmp(feed_mode, "partial-cut") == 0)
       feed_mode_char = 'F';
   }
@@ -1437,15 +1445,17 @@ tpcl_rstartjob_cb(
           cut_char = '1';
       }
 
-      // c: Feed mode (C=batch, D=strip, F=partial-cut)
+      // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
       char feed_mode_char = 'C';
       const char *feed_mode = NULL;
       ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
       if (feed_mode_attr)
       {
         feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-        if (strcmp(feed_mode, "strip") == 0)
+        if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
           feed_mode_char = 'D';
+        else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+          feed_mode_char = 'E';
         else if (strcmp(feed_mode, "partial-cut") == 0)
           feed_mode_char = 'F';
       }
@@ -1807,32 +1817,131 @@ tpcl_rendpage_cb(
     papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Closing HEX graphics data with: |}}");
   }
 
-  // Print the label
+  // Get printer handle for IPP attribute access
+  pappl_printer_t *printer = papplJobGetPrinter(job);
+  if (!printer)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer handle");
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  // Get printer IPP attributes for vendor options
+  ipp_t *printer_attrs = papplPrinterGetDriverAttributes(printer);
+  if (!printer_attrs)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get printer attributes");
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  // Get driver data for media type and speed
+  pappl_pr_driver_data_t driver_data;
+  if (!papplPrinterGetDriverData(printer, &driver_data))
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Failed to get driver data for XS command");
+    ippDelete(printer_attrs);
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  // Build XS (issue label) command dynamically
+  // Format: {XS;I,aaaa,bbbcdefgh|}\n
+
+  // aaaa: Number of labels to be issued (0001 to 9999) - get from job copies
+  int num_copies = papplJobGetCopies(job);
+  if (num_copies < 1 || num_copies > 9999)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Invalid number of copies %d, must be in range [1-9999]", num_copies);
+    ippDelete(printer_attrs);
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
+  }
+
+  // bbb: Cut interval (000 to 100, 000 = no cut)
+  int cut_interval = 0;
+  ipp_attribute_t *cut_interval_attr = ippFindAttribute(printer_attrs, "cut-interval-default", IPP_TAG_INTEGER);
+  if (cut_interval_attr)
+  {
+    cut_interval = ippGetInteger(cut_interval_attr, 0);
+    if (cut_interval < 0 || cut_interval > 100)
+    {
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Invalid cut interval %d, must be in range [0-100]", cut_interval);
+      ippDelete(printer_attrs);
+      tpcl_free_job_buffers(job, tpcl_job);
+      return false;
+    }
+  }
+
+  // c: Type of sensor (0=none, 1=reflective, 2=transmissive)
+  char sensor_char = '2';
+  const char *sensor_type = NULL;
+  ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
+  if (sensor_type_attr)
+  {
+    sensor_type = ippGetString(sensor_type_attr, 0, NULL);
+    if (strcmp(sensor_type, "none") == 0)
+      sensor_char = '0';
+    else if (strcmp(sensor_type, "reflective") == 0)
+      sensor_char = '1';
+  }
+
+  // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
+  char feed_mode_char = 'C';
+  const char *feed_mode = NULL;
+  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
+  if (feed_mode_attr)
+  {
+    feed_mode = ippGetString(feed_mode_attr, 0, NULL);
+    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
+      feed_mode_char = 'D';
+    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+      feed_mode_char = 'E';
+    else if (strcmp(feed_mode, "partial-cut") == 0)
+      feed_mode_char = 'F';
+  }
+
+  // e: Issue speed (use default speed from driver data as hex char)
+  char speed_char = '0' + driver_data.speed_default;
+  if (driver_data.speed_default > 9)
+    speed_char = 'A' + (driver_data.speed_default - 10);
+
+  // f: With/without ribbon (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+  char ribbon_char = '0';
+  const char *media_type = driver_data.media_default.type;
+  if (media_type)
+  {
+    if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
+      ribbon_char = '1';
+    else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
+      ribbon_char = '2';
+  }
+
+  // g: Tag rotation (0 = no rotation, PAPPL handles rotation)
+  char rotation_char = '0';
+
+  // h: Type of status response (0 = not needed)
+  char status_response_char = '0';
+
+  // Build the XS command
   snprintf(
     command,
     sizeof(command),
-    "{XS;I,0001,0002C3000|}\n" //TODO: actually calculate from job data
+    "{XS;I,%04d,%03d%c%c%c%c%c%c|}\n",
+    num_copies,
+    cut_interval,
+    sensor_char,
+    feed_mode_char,
+    speed_char,
+    ribbon_char,
+    rotation_char,
+    status_response_char
   );
   papplDevicePuts(device, command);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending issue label command: %s", command);
-  // Format: {XS;I,copies,cut(3)+detect(1)+mode(1)+speed(1)+media(1)+mirror(1)+status(1)|}
-  // Parameters:
-  //   cut: 000-999 (cut quantity)
-  //   detect: 0-4 (media tracking/detect mode)
-  //   mode: C=tear-off, D=peel-off, E=rewind
-  //   speed: 2-A (2,3,4,5,6,8,A=10)
-  //   media: 0=direct thermal, 1=thermal transfer, 2=ribbon saving
-  //   mirror: 0=normal, 1=mirror
-  //   status: 0=no status, 1=with status
-  //snprintf(command, sizeof(command),
-  //         "{XS;I,%04d,000%d%c%d%d%d%d|}\n",
-  //         options->copies,
-  //         0,    // detect (media tracking) - TODO: make configurable
-  //         'C',  // mode: C=tear-off, D=peel-off, E=rewind - TODO: make configurable
-  //         3,    // speed - TODO: use options->print_speed
-  //         1,    // media: thermal transfer - TODO: make configurable
-  //         0,    // mirror
-  //         0);   // status
+
+  ippDelete(printer_attrs);
+
 
   // Send padding to avoid TCP zero-window error (workaround) - TODO understand and only send when applicable
   //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround)");

@@ -2,7 +2,12 @@
 "roll-margin" = "Seitlicher Rollenüberstand (0.1mm)";
 "sensor-type" = "Art des Sensors";
 "label-cut" = "Label schneiden?";
+"cut-interval" = "Schnittintervall (Labels)";
 "feed-mode" = "Feed-Modus";
+"feed-mode.batch" = "Stapelmodus";
+"feed-mode.strip-backfeed-sensor" = "Streifenmodus (Rückführung mit Sensor)";
+"feed-mode.strip-backfeed-no-sensor" = "Streifenmodus (Rückführung ohne Sensor)";
+"feed-mode.partial-cut" = "Teilschnittmodus";
 "feed-on-label-size-change" = "Feed bei Labelgrößenänderung?";
 "graphics-mode" = "Datentransfermodus";
 "dithering-algorithm" = "Dithering-Algorithmus";

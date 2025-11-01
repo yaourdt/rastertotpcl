@@ -12,19 +12,30 @@
  */
 // TODO: Persist previous page size between job runs to use (T)
 // TODO menschenlesbare namen für label-gap etc ->   papplSystemAddStringsFile(system, "", "en", "en.strings");
-// TODO: Orientation is ? instead of the correct defaut
 
 // TODO: Implement testpage callback
 // TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
 // TODO POINTS_PER_INCH, MM_PER_INCH in all source
 // TODO printer icons
-// Todo choose dithering algo
 // Drucksättigung ist in %, was ist das?
 // Druckgeschwindigkeit ist 0 inch
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
 // TODO AY and AX commands
 
+/*
+I [2025-11-01T08:29:13.228Z] [Printer toshibalabel] Printer identification triggered: Eject one label
+D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved label gap from printer settings: 50 (0.1mm)
+D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved roll margin from printer settings: 0 (0.1mm)
+D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Calculated label dimensions: width=800 (0.1mm), height=2000 (0.1mm), pitch=2050 (0.1mm), roll=800 (0.1mm)
+D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Sending label size command: {D2050,0800,2000,0800|}\n
+D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Sending feed command: {T20C00|}\n
+I [2025-11-01T08:29:13.265Z] [Client 3] OK text/html 0
+D [2025-11-01T08:29:13.266Z] [Client 3] Using HTTP Accept-Language value 'de,en-US;q=0.7,en;q=0.3' for localization.
+D [2025-11-01T08:29:13.266Z] [Client 3] Using language 'de'.
+D [2025-11-01T08:29:13.281Z] [Printer toshibalabel] Status query sent, waiting for response...
+D [2025-11-01T08:29:13.289Z] [Printer toshibalabel] Status response: '06' after 0ms
+*/
 #include "tpcl-driver.h"
 #include "dithering.h"
 #include <math.h>
@@ -284,7 +295,9 @@ tpcl_driver_cb(
 {
   (void)data;
 
+  //
   // Set callbacks
+  //
   driver_data->status_cb     = tpcl_status_cb;           // Printer status callback
   driver_data->identify_cb   = tpcl_identify_cb;         // Identify-Printer callback (feed one blank label)
   driver_data->printfile_cb  = tpcl_print_cb;            // Print (raw) file callback
@@ -296,12 +309,102 @@ tpcl_driver_cb(
   driver_data->testpage_cb   = tpcl_testpage_cb;         // Test page print callback
   driver_data->delete_cb     = tpcl_delete_cb;           // Printer deletion callback
 
+  //
+  // Define Toshiba TEC specific vendor options (max 32 allowed by PAPPL)
+  //
+  driver_data->num_vendor = 0;                           // Number of available vendor options
+  if (!*driver_attrs) *driver_attrs = ippNew();          // Create IPP attributes to describe above vendor options
+
+  // - Gap beween labels in units of 0.1mm
+  driver_data->vendor[driver_data->num_vendor] = "label-gap";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 00, 200);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
+  driver_data->num_vendor++;
+
+  // - Roll margin in units of 0.1mm (width difference between backing paper and label)
+  driver_data->vendor[driver_data->num_vendor] = "roll-margin";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported",  0, 300);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  , 10     );
+  driver_data->num_vendor++;
+
+  // - Sensor type for label detection
+  driver_data->vendor[driver_data->num_vendor] = "sensor-type";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 3, NULL, (const char *[]){"none", "reflective", "transmissive"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-default", NULL, "transmissive");
+  driver_data->num_vendor++;
+
+  //  - Cut/non-cut selection
+  driver_data->vendor[driver_data->num_vendor] = "label-cut";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-supported", 2, NULL, (const char *[]){"non-cut", "cut"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-default", NULL, "non-cut");
+  driver_data->num_vendor++;
+
+  // - Feed mode selection
+  driver_data->vendor[driver_data->num_vendor] = "feed-mode";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 3, NULL, (const char *[]){"batch", "strip", "partial-cut"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-default", NULL, "batch");
+  driver_data->num_vendor++;
+
+  // - Feed on label size change?
+  driver_data->vendor[driver_data->num_vendor] = "feed-on-label-size-change";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-supported", 2, NULL, (const char *[]){"yes", "no"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-default", NULL, "yes");
+  driver_data->num_vendor++;
+
+  // - Graphics mode selection
+  driver_data->vendor[driver_data->num_vendor] = "graphics-mode";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-supported", 5, NULL, (const char *[]){"nibble-and", "hex-and", "topix", "nibble-or", "hex-or"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-default", NULL, "topix");
+  driver_data->num_vendor++;
+
+  // - Dithering algorithm selection
+  driver_data->vendor[driver_data->num_vendor] = "dithering-algorithm";
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "dithering-algorithm-supported", 3, NULL, (const char *[]){"threshold", "bayer", "clustered"});
+  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "dithering-algorithm-default", NULL, "threshold");
+  driver_data->num_vendor++;
+
+  // - Dithering threshold level (0-255, only used with 'threshold' algorithm)
+  driver_data->vendor[driver_data->num_vendor] = "dithering-threshold";
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "dithering-threshold-supported", 0, 255);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "dithering-threshold-default"  , 128);
+  driver_data->num_vendor++;
+
+  //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
+  //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
+
+  //
   // Model-agnostic printer options
-  dither_threshold16(driver_data->gdither, 128);         // Dithering for 'auto', 'text', and 'graphic' TODO let user choose cutoff and algo
-  dither_bayer16(driver_data->pdither);                  // Dithering for 'photo' TODO let user choose algo
-  driver_data->format = "application/vnd.toshiba-tpcl";  // Native file format
-  driver_data->ppm = 10;                                 // Pages per minute (guesstimate)
-  driver_data->ppm_color = 0;                            // No color printing
+  //
+
+  // Configure dithering based on default IPP attributes
+  const char *dither_algo = "threshold";
+  ipp_attribute_t *dither_algo_attr = ippFindAttribute(*driver_attrs, "dithering-algorithm-default", IPP_TAG_KEYWORD);
+  if (dither_algo_attr)
+  {
+    dither_algo = ippGetString(dither_algo_attr, 0, NULL);
+  }
+
+  if (strcmp(dither_algo, "bayer") == 0)
+  {
+    dither_bayer16(driver_data->gdither);                // Dithering for 'auto', 'text', and 'graphic'
+    dither_bayer16(driver_data->pdither);                // Dithering for 'photo' (currently not supported)
+  }
+  else if (strcmp(dither_algo, "clustered") == 0)
+  {
+    dither_clustered16(driver_data->gdither);
+    dither_clustered16(driver_data->pdither);
+  }
+  else
+  {
+    int dither_threshold = 128;
+    ipp_attribute_t *dither_threshold_attr = ippFindAttribute(*driver_attrs, "dithering-threshold-default", IPP_TAG_INTEGER);
+    if (dither_threshold_attr)
+    {
+      dither_threshold = ippGetInteger(dither_threshold_attr, 0);
+    }
+    dither_threshold16(driver_data->gdither, (unsigned char)dither_threshold);
+    dither_threshold16(driver_data->pdither, (unsigned char)dither_threshold);
+  }
 
   // Printer icons - 64x64, 128x128, and 256x256 pixel sizes
   strncpy(driver_data->icons[0].filename, "../assets/icon-b-ev4d-64.png", sizeof(driver_data->icons[0].filename) - 1);
@@ -316,6 +419,9 @@ tpcl_driver_cb(
   driver_data->icons[2].data = NULL;
   driver_data->icons[2].datalen = 0;
 
+  driver_data->format = "application/vnd.toshiba-tpcl";  // Native file format
+  driver_data->ppm = 10;                                 // Pages per minute (guesstimate)
+  driver_data->ppm_color = 0;                            // No color printing
   driver_data->kind = PAPPL_KIND_LABEL;		            	 // Type of printer
   driver_data->has_supplies = false;                     // Printer can report supplies.
   driver_data->input_face_up = true;		                 // Does input media come in face-up?
@@ -353,55 +459,6 @@ tpcl_driver_cb(
   driver_data->tear_offset_supported[0] =   0;           // Min offset when in mode for tearing labels
   driver_data->tear_offset_supported[1] = 180;           // Max offset when in mode for tearing labels
   driver_data->tear_offset_configured = 0;               // Default offset when in mode for tearing labels
-
-  // Define Toshiba TEC specific vendor options (max 32 allowed by PAPPL)
-  driver_data->num_vendor = 0;                           // Number of available vendor options
-  if (!*driver_attrs) *driver_attrs = ippNew();          // Create IPP attributes to describe above vendor options
-
-  // Gap beween labels in units of 0.1mm
-  driver_data->vendor[driver_data->num_vendor] = "label-gap";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 00, 200);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
-  driver_data->num_vendor++;
-
-  // Roll margin in units of 0.1mm (width difference between backing paper and label)
-  driver_data->vendor[driver_data->num_vendor] = "roll-margin";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported",  0, 300);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  , 10     );
-  driver_data->num_vendor++;
-
-  // Sensor type for label detection
-  driver_data->vendor[driver_data->num_vendor] = "sensor-type";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 3, NULL, (const char *[]){"none", "reflective", "transmissive"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-default", NULL, "transmissive");
-  driver_data->num_vendor++;
-
-  // Cut/non-cut selection
-  driver_data->vendor[driver_data->num_vendor] = "label-cut";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-supported", 2, NULL, (const char *[]){"non-cut", "cut"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-default", NULL, "non-cut");
-  driver_data->num_vendor++;
-
-  // Feed mode selection
-  driver_data->vendor[driver_data->num_vendor] = "feed-mode";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 3, NULL, (const char *[]){"batch", "strip", "partial-cut"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-default", NULL, "batch");
-  driver_data->num_vendor++;
-
-  // Graphics mode
-  driver_data->vendor[driver_data->num_vendor] = "graphics-mode";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-supported", 5, NULL, (const char *[]){"nibble-and", "hex-and", "topix", "nibble-or", "hex-or"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-default", NULL, "topix");
-  driver_data->num_vendor++;
-
-  // Graphics mode
-  driver_data->vendor[driver_data->num_vendor] = "feed-on-label-size-change";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-supported", 2, NULL, (const char *[]){"yes", "no"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-default", NULL, "yes");
-  driver_data->num_vendor++;
-
-  //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
-  //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
 
   // Model-specific printer options
   for (int i = 0; i < tpcl_drivers_count; i++)

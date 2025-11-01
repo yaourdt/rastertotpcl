@@ -10,31 +10,16 @@
  *
  * Licensed under GNU GPL v3.
  */
-// TODO: Persist previous page size between job runs to use (T)
-
 // TODO: Implement testpage callback
 // TODO: Propper error handling wie zB Deckel offen
 // TODO set IPP attributes
 // TODO printer icons
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
-// TODO AY and AX commands
 
 /*
 Printer toshibalabel] Driver provides small-48x48 icon in file '../assets/icon-b-ev4d-64.png'.
 D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides medium-128x128 icon in file '../assets/icon-b-ev4d-128.png'.
 D [2025-11-01T10:46:35.058Z] [Printer toshibalabel] Driver provides large-512x512 icon in file '../assets/icon-b-ev4d-256.png'.
-
-I [2025-11-01T08:29:13.228Z] [Printer toshibalabel] Printer identification triggered: Eject one label
-D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved label gap from printer settings: 50 (0.1mm)
-D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Retrieved roll margin from printer settings: 0 (0.1mm)
-D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Calculated label dimensions: width=800 (0.1mm), height=2000 (0.1mm), pitch=2050 (0.1mm), roll=800 (0.1mm)
-D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Sending label size command: {D2050,0800,2000,0800|}\n
-D [2025-11-01T08:29:13.261Z] [Printer toshibalabel] Sending feed command: {T20C00|}\n
-I [2025-11-01T08:29:13.265Z] [Client 3] OK text/html 0
-D [2025-11-01T08:29:13.266Z] [Client 3] Using HTTP Accept-Language value 'de,en-US;q=0.7,en;q=0.3' for localization.
-D [2025-11-01T08:29:13.266Z] [Client 3] Using language 'de'.
-D [2025-11-01T08:29:13.281Z] [Printer toshibalabel] Status query sent, waiting for response...
-D [2025-11-01T08:29:13.289Z] [Printer toshibalabel] Status response: '06' after 0ms
 */
 #include "tpcl-driver.h"
 #include "dithering.h"

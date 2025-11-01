@@ -17,8 +17,6 @@
 // TODO set IPP attributes
 // TODO POINTS_PER_INCH, MM_PER_INCH in all source
 // TODO printer icons
-// Drucksättigung ist in %, was ist das?
-// Druckgeschwindigkeit ist 0 inch
 // TODO set label processing modes according to cutter / peeler / tear bar installed or not
 // TODO AY and AX commands
 
@@ -463,7 +461,9 @@ tpcl_driver_cb(
   driver_data->tear_offset_supported[1] = 180;           // Max offset when in mode for tearing labels
   driver_data->tear_offset_configured = 0;               // Default offset when in mode for tearing labels
 
+  //
   // Model-specific printer options
+  //
   for (int i = 0; i < tpcl_drivers_count; i++)
   {
     if (!strcmp(driver_name, tpcl_drivers[i].name))
@@ -575,10 +575,14 @@ tpcl_driver_cb(
       driver_data->top_offset_supported[1]      =  5000; // Maximum top printing offset supported
       driver_data->media_ready[0].top_offset    =     0; // Default top offset in hundredths of millimeters
 
-      // Printer darkness
-      driver_data->darkness_supported           =    21; // Printer darkness (Toshiba -10 ... 10 -> 21 values)
-      driver_data->darkness_default             =    11; // Default darkness adjustment at printer power-on
-      driver_data->darkness_configured          =    11; // Currently configured printing darkness
+      // Printer darkness (workaround due to PAPPL web interface limitations)
+      driver_data->darkness_supported           =     0; // Printer darkness
+      driver_data->darkness_default             =     0; // Default darkness adjustment at printer power-on
+      driver_data->darkness_configured          =     0; // Currently configured printing darkness
+      driver_data->vendor[driver_data->num_vendor] = "print-darkness";
+      ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "print-darkness-supported", -10, 10);
+      ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "print-darkness-default",         0);
+      driver_data->num_vendor++;
 
       // Default media
       driver_data->media_default = driver_data->media_ready[0];

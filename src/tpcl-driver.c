@@ -10,13 +10,6 @@
  *
  * Licensed under GNU GPL v3.
  */
-// TODO: Implement testpage callback
-// TODO set IPP attributes
-// TODO set label processing modes according to cutter / peeler / tear bar installed or not
-// TODO "Randlos offset" in den medieneinstellungen
-// Print testpage: 25-11-01T19:21:40.294Z] [Printer toshibalabel] No previous state file found at /var/cache/tpcl-printer-app/toshibalabel.state
-//D [2025-11-01T19:21:40.294Z] [Printer toshibalabel] No previous label dimensions found
-// Path of state file nochmals abgleichen
 
 #include "tpcl-driver.h"
 #include "dithering.h"
@@ -372,9 +365,6 @@ tpcl_driver_cb(
   ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "backfeed-adjustment-supported", -99, 99);
   ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "backfeed-adjustment-default"  , 0);
   driver_data->num_vendor++;
-
-  //driver_data->num_features;                           // Number of "ipp-features-supported" values TODO
-  //driver_data->*features[PAPPL_MAX_VENDOR];            // "ipp-features-supported" values TODO
 
   //
   // Model-agnostic printer options
@@ -1590,8 +1580,8 @@ tpcl_rstartpage_cb(
       command,
       sizeof(command),
       "{SG;0000,00000,%04u,%05u,%d,",
-                                                         // x_origin TODO margin
-                                                         // y_origin TODO margin
+                                                         // x_origin
+                                                         // y_origin
       options->header.cupsWidth,                         // width_dots
       options->header.cupsHeight,                        // height_dots
       tpcl_job->gmode                                    // graphics mode
@@ -1985,19 +1975,7 @@ tpcl_rendpage_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending issue label command: %s", command);
 
   ippDelete(printer_attrs);
-
-
-  // Send padding to avoid TCP zero-window error (workaround) - TODO understand and only send when applicable
-  //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround)");
-  //papplDevicePrintf(device, "%1024s", "");
-
-  // Send 600 null bytes dummy data (BEV4T last packet lost bug workaround) - TODO understand and only send when applicable
-  //static unsigned char dummy_data[600] = {0};  // 600 null bytes for BEV4T workaround
-  //papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 600 null bytes (BEV4T workaround)");
-  //papplDeviceWrite(device, dummy_data, sizeof(dummy_data));
-
   papplDeviceFlush(device);
-
   return true;
 }
 
@@ -2615,8 +2593,8 @@ tpcl_topix_output_buffer(
     command,
     sizeof(command),
     "{SG;0000,%05d,%04u,%05u,%d,",
-                                                         // x_origin in 0.1mm TODO margin
-    tpcl_job->y_offset,                                  // y_origin in 0.1mm TODO margin
+                                                         // x_origin in 0.1mm
+    tpcl_job->y_offset,                                  // y_origin in 0.1mm
     options->header.cupsWidth,                           // width_dots
     options->header.HWResolution[0],                     // in TOPIX mode: Resolution of graphic data (150 or 300 dpi)
     tpcl_job->gmode                                      // graphics mode

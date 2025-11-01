@@ -1,0 +1,9 @@
+"label-gap" = "Labelabstand (0.1mm)";
+"roll-margin" = "Seitlicher Rollenüberstand (0.1mm)";
+"sensor-type" = "Art des Sensors";
+"label-cut" = "Label schneiden?";
+"feed-mode" = "Feed-Modus";
+"feed-on-label-size-change" = "Feed bei Labelgrößenänderung?";
+"graphics-mode" = "Datentransfermodus";
+"dithering-algorithm" = "Dithering-Algorithmus";
+"dithering-threshold" = "Dithering-Threshold";

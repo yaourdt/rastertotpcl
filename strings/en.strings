@@ -1,0 +1,9 @@
+"label-gap" = "Label Gap (0.1mm)";
+"roll-margin" = "Horizontal Roll Margin (0.1mm)";
+"sensor-type" = "Sensor Type";
+"label-cut" = "Cut label?";
+"feed-mode" = "Feed Mode";
+"feed-on-label-size-change" = "Feed on Label Size Change?";
+"graphics-mode" = "Data Transmission Mode";
+"dithering-algorithm" = "Dithering Algorithm";
+"dithering-threshold" = "Dithering Threshold";

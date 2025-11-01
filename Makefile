@@ -34,6 +34,8 @@ pappl-init:
 		echo "Configuring and building PAPPL for the first time..."; \
 		cd $(PAPPL_DIR) && ./configure && $(MAKE); \
 	fi
+	@echo "Patching PAPPL translations with custom strings..."
+	@./scripts/patch-translations.sh
 
 # Clean build artifacts
 clean:

@@ -13,10 +13,19 @@ This project is migrating from a PPD-based raster filter for Toshiba Tec Label P
 
 ### Building and Running
 
-Execute from within the `src/` directory:
-
+Full build including PAPPL (ususally not necessary)
 ```bash
-make clean && make && sudo ./tpcl-printer-app server -o log-level=debug
+make full
+```
+
+Build without rebuilding PAPPL
+```bash
+make
+```
+
+Run
+```bash
+sudo ./bin/tpcl-printer-app server -o log-level=debug
 ```
 
 ### Viewing Logs
@@ -29,13 +38,7 @@ sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 
 ### Testing Print Jobs
 
-**IMPORTANT**: Always confirm with the user before starting a print job.
-
-Test print command example:
-
-```bash
-ipptool -tv -f /home/yaurdt/Downloads/tux.png ipp://localhost:8000/ipp/print/TestPrinter print-job.test
-```
+The user will issue test jobs.
 
 ## Key Technologies
 
@@ -45,11 +48,7 @@ ipptool -tv -f /home/yaurdt/Downloads/tux.png ipp://localhost:8000/ipp/print/Tes
 
 ## Current Status
 
-Based on recent commits:
-- Printer status polling implemented
-- Status code reading functional
-- Working on image rendering (test image printing in progress)
-- Line callback implementation in development
+Project is generally working, we are now fixing smaller issues and getting ready for packagning.
 
 ## Git Information
 

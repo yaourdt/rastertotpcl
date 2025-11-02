@@ -266,6 +266,18 @@ static bool tpcl_get_feed_adjustments(
   pappl_printer_t          *printer
 );
 
+static char tpcl_map_sensor_type(
+  const char               *sensor_type
+);
+
+static char tpcl_map_cut_type(
+  const char               *cut_type
+);
+
+static char tpcl_map_feed_mode(
+  const char               *feed_mode
+);
+
 
 /*
  * 'tpcl_driver_cb()' - Main driver callback
@@ -846,44 +858,16 @@ void tpcl_identify_cb(
 
   // Build feed command dynamically {Tabcde|}
   // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
-  char sensor_char = '2';
-  ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
-  if (sensor_attr)
-  {
-    const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
-    if (strcmp(sensor_type, "none") == 0)
-      sensor_char = '0';
-    else if (strcmp(sensor_type, "reflective") == 0)
-      sensor_char = '1';
-    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
-      sensor_char = '3';
-    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
-      sensor_char = '4';
-  }
+  const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", NULL, printer);
+  char sensor_char = tpcl_map_sensor_type(sensor_type);
 
   // b: Cut selection (0=non-cut, 1=cut)
-  char cut_char = '0';
-  ipp_attribute_t *cut_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
-  if (cut_attr)
-  {
-    const char *cut_type = ippGetString(cut_attr, 0, NULL);
-    if (strcmp(cut_type, "cut") == 0)
-      cut_char = '1';
-  }
+  const char *cut_type = tpcl_get_str_option(printer_attrs, "label-cut", "non-cut", NULL, printer);
+  char cut_char = tpcl_map_cut_type(cut_type);
 
   // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
-  char feed_mode_char = 'C';
-  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
-  if (feed_mode_attr)
-  {
-    const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
-      feed_mode_char = 'D';
-    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
-      feed_mode_char = 'E';
-    else if (strcmp(feed_mode, "partial-cut") == 0)
-      feed_mode_char = 'F';
-  }
+  const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
+  char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
   // d: Feed speed (use default speed from driver data as hex char)
   char speed_char = '0' + driver_data.speed_default;
@@ -1278,13 +1262,8 @@ tpcl_rstartjob_cb(
   bool label_size_changed = tpcl_state_check_and_update(printer, tpcl_job->print_width, tpcl_job->print_height, label_gap, roll_margin, job);
 
   // If label size changed and feed-on-label-size-change is enabled, send feed command
-  const char *feed_on_change_str = NULL;
-  ipp_attribute_t *feed_on_change_attr = ippFindAttribute(printer_attrs, "feed-on-label-size-change-default", IPP_TAG_KEYWORD);
-  if (feed_on_change_attr)
-  {
-    feed_on_change_str = ippGetString(feed_on_change_attr, 0, NULL);
-  }
-  bool should_feed = label_size_changed && feed_on_change_str && (strcmp(feed_on_change_str, "yes") == 0);
+  const char *feed_on_change_str = tpcl_get_str_option(printer_attrs, "feed-on-label-size-change", "no", job, NULL);
+  bool should_feed = label_size_changed && (strcmp(feed_on_change_str, "yes") == 0);
 
   if (should_feed)
   {
@@ -1300,46 +1279,16 @@ tpcl_rstartjob_cb(
     {
       // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
       char sensor_char = '2';
-      const char *sensor_type = NULL;
-      ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
-      if (sensor_type_attr)
-      {
-        sensor_type = ippGetString(sensor_type_attr, 0, NULL);
-        if (strcmp(sensor_type, "none") == 0)
-          sensor_char = '0';
-        else if (strcmp(sensor_type, "reflective") == 0)
-          sensor_char = '1';
-        else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
-          sensor_char = '3';
-        else if (strcmp(sensor_type, "reflective-pre-print") == 0)
-          sensor_char = '4';
-      }
+      const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", job, NULL);
+      sensor_char = tpcl_map_sensor_type(sensor_type);
 
       // b: Cut selection (0=non-cut, 1=cut)
-      char cut_char = '0';
-      const char *cut_type = NULL;
-      ipp_attribute_t *cut_type_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
-      if (cut_type_attr)
-      {
-        cut_type = ippGetString(cut_type_attr, 0, NULL);
-        if (strcmp(cut_type, "cut") == 0)
-          cut_char = '1';
-      }
+      const char *cut_type = tpcl_get_str_option(printer_attrs, "label-cut", "non-cut", job, NULL);
+      char cut_char = tpcl_map_cut_type(cut_type);
 
       // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
-      char feed_mode_char = 'C';
-      const char *feed_mode = NULL;
-      ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
-      if (feed_mode_attr)
-      {
-        feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-        if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
-          feed_mode_char = 'D';
-        else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
-          feed_mode_char = 'E';
-        else if (strcmp(feed_mode, "partial-cut") == 0)
-          feed_mode_char = 'F';
-      }
+      const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", job, NULL);
+      char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
       // d: Feed speed (use default speed from driver data as hex char)
       char speed_char = '0' + driver_data.speed_default;
@@ -1750,36 +1699,12 @@ tpcl_rendpage_cb(
   }
 
   // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
-  char sensor_char = '2';
-  const char *sensor_type = NULL;
-  ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
-  if (sensor_type_attr)
-  {
-    sensor_type = ippGetString(sensor_type_attr, 0, NULL);
-    if (strcmp(sensor_type, "none") == 0)
-      sensor_char = '0';
-    else if (strcmp(sensor_type, "reflective") == 0)
-      sensor_char = '1';
-    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
-      sensor_char = '3';
-    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
-      sensor_char = '4';
-  }
+  const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", job, NULL);
+  char sensor_char = tpcl_map_sensor_type(sensor_type);
 
   // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
-  char feed_mode_char = 'C';
-  const char *feed_mode = NULL;
-  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
-  if (feed_mode_attr)
-  {
-    feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
-      feed_mode_char = 'D';
-    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
-      feed_mode_char = 'E';
-    else if (strcmp(feed_mode, "partial-cut") == 0)
-      feed_mode_char = 'F';
-  }
+  const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", job, NULL);
+  char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
   // e: Issue speed (use default speed from driver data as hex char)
   char speed_char = '0' + driver_data.speed_default;
@@ -1989,57 +1914,24 @@ const char* tpcl_testpage_cb(
   bool label_size_changed = tpcl_state_check_and_update(printer, print_width, print_height, label_pitch - print_height, roll_width - print_width, NULL);
 
   // Check if feed-on-label-size-change is enabled
-  const char *feed_on_change_str = NULL;
-  ipp_attribute_t *feed_on_change_attr = ippFindAttribute(printer_attrs, "feed-on-label-size-change-default", IPP_TAG_KEYWORD);
-  if (feed_on_change_attr)
-  {
-    feed_on_change_str = ippGetString(feed_on_change_attr, 0, NULL);
-  }
-  bool should_feed = label_size_changed && feed_on_change_str && (strcmp(feed_on_change_str, "yes") == 0);
+  const char *feed_on_change_str = tpcl_get_str_option(printer_attrs, "feed-on-label-size-change", "no", NULL, printer);
+  bool should_feed = label_size_changed && (strcmp(feed_on_change_str, "yes") == 0);
 
   if (should_feed)
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Label size changed and feed-on-label-size-change is enabled, sending feed command");
 
     // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
-    char sensor_char = '2';
-    ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
-    if (sensor_attr)
-    {
-      const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
-      if (strcmp(sensor_type, "none") == 0)
-        sensor_char = '0';
-      else if (strcmp(sensor_type, "reflective") == 0)
-        sensor_char = '1';
-      else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
-        sensor_char = '3';
-      else if (strcmp(sensor_type, "reflective-pre-print") == 0)
-        sensor_char = '4';
-    }
+    const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", NULL, printer);
+    char sensor_char = tpcl_map_sensor_type(sensor_type);
 
     // b: Cut selection (0=non-cut, 1=cut)
-    char cut_char = '0';
-    ipp_attribute_t *cut_attr = ippFindAttribute(printer_attrs, "label-cut-default", IPP_TAG_KEYWORD);
-    if (cut_attr)
-    {
-      const char *cut_type = ippGetString(cut_attr, 0, NULL);
-      if (strcmp(cut_type, "cut") == 0)
-        cut_char = '1';
-    }
+    const char *cut_type = tpcl_get_str_option(printer_attrs, "label-cut", "non-cut", NULL, printer);
+    char cut_char = tpcl_map_cut_type(cut_type);
 
     // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
-    char feed_mode_char = 'C';
-    ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
-    if (feed_mode_attr)
-    {
-      const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-      if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
-        feed_mode_char = 'D';
-      else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
-        feed_mode_char = 'E';
-      else if (strcmp(feed_mode, "partial-cut") == 0)
-        feed_mode_char = 'F';
-    }
+    const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
+    char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
     // d: Feed speed (use default speed from driver data as hex char)
     char speed_char = '0' + driver_data.speed_default;
@@ -2133,34 +2025,12 @@ const char* tpcl_testpage_cb(
   int cut_interval = tpcl_get_int_option(printer_attrs, "cut-interval", 0, NULL, printer);
 
   // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
-  char sensor_char = '2';
-  ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
-  if (sensor_attr)
-  {
-    const char *sensor_type = ippGetString(sensor_attr, 0, NULL);
-    if (strcmp(sensor_type, "none") == 0)
-      sensor_char = '0';
-    else if (strcmp(sensor_type, "reflective") == 0)
-      sensor_char = '1';
-    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
-      sensor_char = '3';
-    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
-      sensor_char = '4';
-  }
+  const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", NULL, printer);
+  char sensor_char = tpcl_map_sensor_type(sensor_type);
 
   // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
-  char feed_mode_char = 'C';
-  ipp_attribute_t *feed_mode_attr = ippFindAttribute(printer_attrs, "feed-mode-default", IPP_TAG_KEYWORD);
-  if (feed_mode_attr)
-  {
-    const char *feed_mode = ippGetString(feed_mode_attr, 0, NULL);
-    if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
-      feed_mode_char = 'D';
-    else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
-      feed_mode_char = 'E';
-    else if (strcmp(feed_mode, "partial-cut") == 0)
-      feed_mode_char = 'F';
-  }
+  const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
+  char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
   // e: Issue speed (use default speed from driver data as hex char)
   char speed_char = '0' + driver_data.speed_default;
@@ -2592,4 +2462,56 @@ tpcl_get_feed_adjustments(
 
   // Return true if at least one adjustment is non-zero
   return (*feed_adjustment != 0 || *cut_position_adjustment != 0 || *backfeed_adjustment != 0);
+}
+
+
+/*
+ * 'tpcl_map_sensor_type()' - Map sensor type string to TPCL character
+ */
+
+static char
+tpcl_map_sensor_type(const char *sensor_type)
+{
+  if (strcmp(sensor_type, "none") == 0)
+    return '0';
+  else if (strcmp(sensor_type, "reflective") == 0)
+    return '1';
+  else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+    return '3';
+  else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+    return '4';
+  else
+    return '2';  // transmissive (default)
+}
+
+
+/*
+ * 'tpcl_map_cut_type()' - Map cut type string to TPCL character
+ */
+
+static char
+tpcl_map_cut_type(const char *cut_type)
+{
+  if (strcmp(cut_type, "cut") == 0)
+    return '1';
+  else
+    return '0';  // non-cut (default)
+}
+
+
+/*
+ * 'tpcl_map_feed_mode()' - Map feed mode string to TPCL character
+ */
+
+static char
+tpcl_map_feed_mode(const char *feed_mode)
+{
+  if (strcmp(feed_mode, "strip-backfeed-sensor") == 0)
+    return 'D';
+  else if (strcmp(feed_mode, "strip-backfeed-no-sensor") == 0)
+    return 'E';
+  else if (strcmp(feed_mode, "partial-cut") == 0)
+    return 'F';
+  else
+    return 'C';  // batch (default)
 }

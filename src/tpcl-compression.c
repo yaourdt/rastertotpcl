@@ -5,6 +5,9 @@
  * Supports TOPIX 3-level hierarchical XOR compression.
  *
  * Copyright © 2025 by Mark Dornbach
+ * Copyright © 2010 by Sam Lown
+ * Copyright © 2009 by Patrick Kong
+ * Copyright © 2001-2007 by Easy Software Products
  *
  * Licensed under GNU GPL v3.
  */

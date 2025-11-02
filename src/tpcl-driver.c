@@ -545,7 +545,7 @@ tpcl_driver_cb(
       papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Media type settings: num_type=%d, thermal_transfer=%d, thermal_transfer_with_ribbon=%d", driver_data->num_type, tpcl_printer_properties[i].thermal_transfer, tpcl_printer_properties[i].thermal_transfer_with_ribbon);
 
       // Fill out ready media, by default we are not setting margins
-      driver_data->borderless                   =  true; // Borderless margins supported?
+      driver_data->borderless                   = false; // Offer the option to toggle borderless in the UI. Makes no sense, we are always borderless
       driver_data->left_right                   =     0; // Left and right margins in hundredths of millimeters
       driver_data->bottom_top                   =     0; // Bottom and top margins in hundredths of millimeters	
       driver_data->media_ready[0].top_margin    =     0; // Top margin in hundredths of millimeters
@@ -564,8 +564,8 @@ tpcl_driver_cb(
       driver_data->left_offset_supported[0]     =     0; // Minimum left printing offset supported
       driver_data->left_offset_supported[1]     =     0; // Maximum left printing offset supported
       driver_data->media_ready[0].left_offset   =     0; // Default left offset in hundredths of millimeters
-      driver_data->top_offset_supported[0]      = -5000; // Minimum top printing offset supported
-      driver_data->top_offset_supported[1]      =  5000; // Maximum top printing offset supported
+      driver_data->top_offset_supported[0]      =     0; // Minimum top printing offset supported
+      driver_data->top_offset_supported[1]      =     0; // Maximum top printing offset supported
       driver_data->media_ready[0].top_offset    =     0; // Default top offset in hundredths of millimeters
 
       // Printer darkness (workaround due to PAPPL web interface limitations)

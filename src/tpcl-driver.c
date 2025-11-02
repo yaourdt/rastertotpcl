@@ -290,7 +290,7 @@ tpcl_driver_cb(
 
   // - Gap beween labels in units of 0.1mm
   driver_data->vendor[driver_data->num_vendor] = "label-gap";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported", 00, 200);
+  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported",  0, 200);
   ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
   driver_data->num_vendor++;
 
@@ -302,7 +302,7 @@ tpcl_driver_cb(
 
   // - Sensor type for label detection
   driver_data->vendor[driver_data->num_vendor] = "sensor-type";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 3, NULL, (const char *[]){"none", "reflective", "transmissive"});
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 5, NULL, (const char *[]){"none", "reflective", "transmissive", "reflective-pre-print", "transmissive-pre-print"});
   ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-default", NULL, "transmissive");
   driver_data->num_vendor++;
 
@@ -907,7 +907,7 @@ void tpcl_identify_cb(
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
   // Build feed command dynamically {Tabcde|}
-  // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+  // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
   char sensor_char = '2';
   ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
   if (sensor_attr)
@@ -917,6 +917,10 @@ void tpcl_identify_cb(
       sensor_char = '0';
     else if (strcmp(sensor_type, "reflective") == 0)
       sensor_char = '1';
+    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+      sensor_char = '3';
+    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+      sensor_char = '4';
   }
 
   // b: Cut selection (0=non-cut, 1=cut)
@@ -1455,7 +1459,7 @@ tpcl_rstartjob_cb(
     }
     else
     {
-      // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+      // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
       char sensor_char = '2';
       const char *sensor_type = NULL;
       ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
@@ -1466,6 +1470,10 @@ tpcl_rstartjob_cb(
           sensor_char = '0';
         else if (strcmp(sensor_type, "reflective") == 0)
           sensor_char = '1';
+        else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+          sensor_char = '3';
+        else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+          sensor_char = '4';
       }
 
       // b: Cut selection (0=non-cut, 1=cut)
@@ -1907,7 +1915,7 @@ tpcl_rendpage_cb(
     }
   }
 
-  // c: Type of sensor (0=none, 1=reflective, 2=transmissive)
+  // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
   char sensor_char = '2';
   const char *sensor_type = NULL;
   ipp_attribute_t *sensor_type_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
@@ -1918,6 +1926,10 @@ tpcl_rendpage_cb(
       sensor_char = '0';
     else if (strcmp(sensor_type, "reflective") == 0)
       sensor_char = '1';
+    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+      sensor_char = '3';
+    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+      sensor_char = '4';
   }
 
   // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
@@ -2228,7 +2240,7 @@ const char* tpcl_testpage_cb(
   {
     papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Label size changed and feed-on-label-size-change is enabled, sending feed command");
 
-    // a: Sensor type (0=none, 1=reflective, 2=transmissive)
+    // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
     char sensor_char = '2';
     ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
     if (sensor_attr)
@@ -2238,6 +2250,10 @@ const char* tpcl_testpage_cb(
         sensor_char = '0';
       else if (strcmp(sensor_type, "reflective") == 0)
         sensor_char = '1';
+      else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+        sensor_char = '3';
+      else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+        sensor_char = '4';
     }
 
     // b: Cut selection (0=non-cut, 1=cut)
@@ -2360,7 +2376,7 @@ const char* tpcl_testpage_cb(
     cut_interval = ippGetInteger(cut_interval_attr, 0);
   }
 
-  // c: Type of sensor (0=none, 1=reflective, 2=transmissive)
+  // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
   char sensor_char = '2';
   ipp_attribute_t *sensor_attr = ippFindAttribute(printer_attrs, "sensor-type-default", IPP_TAG_KEYWORD);
   if (sensor_attr)
@@ -2370,6 +2386,10 @@ const char* tpcl_testpage_cb(
       sensor_char = '0';
     else if (strcmp(sensor_type, "reflective") == 0)
       sensor_char = '1';
+    else if (strcmp(sensor_type, "transmissive-pre-print") == 0)
+      sensor_char = '3';
+    else if (strcmp(sensor_type, "reflective-pre-print") == 0)
+      sensor_char = '4';
   }
 
   // d: Issue mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)

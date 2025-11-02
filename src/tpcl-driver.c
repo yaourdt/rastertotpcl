@@ -1135,8 +1135,7 @@ tpcl_rwriteline_cb(
  * Sends page finalization commands:
  *   1. (if not TOPIX compression) ...|} -> Command footer
  *   2. {XS;I,aaaa,bbbcdefgh|} - Execute print command
- *   3. TCP workaround: 1024 spaces padding
- *   4. BEV4T workaround: Send 600 null bytes as dummy data 
+ *   3. (if on a TCP connection) TCP workaround: 1024 spaces padding
  */
 
 bool
@@ -1267,6 +1266,8 @@ tpcl_rendpage_cb(
  * 'tpcl_rendjob_cb()' - End a job
  *
  * No specific commands sent at end of job, just cleanup job data structure.
+ * One exception:
+ *   1. (if device is a BEV4T) Workaround: Send 600 null bytes as dummy data  
  */
 
 bool
@@ -1283,6 +1284,20 @@ tpcl_rendjob_cb(
   {
     papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Job data structure not initialized");
     return false;
+  }
+
+  // Workaround: Send dummy data to avoid last packet lost bug on B-EV4T models
+  pappl_printer_t *printer = papplJobGetPrinter(job);
+  if (printer)
+  {
+    const char *driver_name = papplPrinterGetDriverName(printer);
+    if (driver_name && strstr(driver_name, "B-EV4T"))
+    {
+      static unsigned char dummy_data[600] = {0};  // 600 null bytes for BEV4T workaround
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 600 null bytes (BEV4T workaround)");
+      papplDeviceWrite(device, dummy_data, sizeof(dummy_data));
+      papplDeviceFlush(device);
+    }
   }
 
   // Free buffers

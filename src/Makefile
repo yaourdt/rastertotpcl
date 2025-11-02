@@ -24,7 +24,7 @@ SOURCES = $(wildcard *.c)
 OBJECTS = $(SOURCES:.c=.o)
 
 # Headers
-HEADERS = tpcl-driver.h tpcl-state.h dithering.h
+HEADERS := $(wildcard *.h)
 
 .PHONY: all clean install uninstall
 

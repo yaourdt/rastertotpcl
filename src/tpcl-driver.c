@@ -14,6 +14,7 @@
 #include "tpcl-driver.h"
 #include "tpcl-state.h"
 #include "tpcl-compression.h"
+#include "tpcl-commands.h"
 #include "dithering.h"
 #include "icon-48.h"
 #include "icon-128.h"
@@ -761,7 +762,6 @@ void tpcl_identify_cb(
 
   pappl_device_t           *device;                      // Printer device connection
   pappl_pr_driver_data_t   driver_data;                  // Driver data
-  char                     command[256];                 // Command buffer
   int                      print_width;                  // Effective print width (0.1mm)
   int                      print_height;                 // Effective print height (0.1mm)
   int                      label_pitch;                  // Label pitch with gap (0.1mm)
@@ -822,64 +822,39 @@ void tpcl_identify_cb(
   }
 
   // Send label size command
-  snprintf(
-    command,
-    sizeof(command),
-    "{D%04d,%04d,%04d,%04d|}\n",
-    label_pitch,
-    print_width,
-    print_height,
-    roll_width
-  );
-  papplDevicePuts(device, command);
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
+  tpcl_cmd_label_size(device, label_pitch, print_width, print_height, roll_width, NULL, printer);
 
-  // Build feed command dynamically {Tabcde|}
-  // a: Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
+  // Build feed command parameters
+  // Sensor type (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
   const char *sensor_type = tpcl_get_str_option(printer_attrs, "sensor-type", "transmissive", NULL, printer);
   char sensor_char = tpcl_map_sensor_type(sensor_type);
 
-  // b: Cut selection (0=non-cut, 1=cut)
+  // Cut selection (0=non-cut, 1=cut)
   const char *cut_type = tpcl_get_str_option(printer_attrs, "label-cut", "non-cut", NULL, printer);
   char cut_char = tpcl_map_cut_type(cut_type);
 
-  // c: Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
+  // Feed mode (C=batch, D=strip with backfeed sensor valid, E=strip with backfeed sensor ignored, F=partial-cut)
   const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
   char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-  // d: Feed speed (use default speed from driver data as hex char)
+  // Feed speed (use default speed from driver data as hex char)
   char speed_char = '0' + driver_data.speed_default;
   if (driver_data.speed_default > 9)
     speed_char = 'A' + (driver_data.speed_default - 10);
 
-  // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
+  // Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
   char ribbon_char = '0';
   const char *media_type = driver_data.media_default.type;
-
   if (media_type)
   {
     if (strcmp(media_type, "thermal-transfer-ribbon-saving") == 0)
-    {
       ribbon_char = '1';
-    }
     else if (strcmp(media_type, "thermal-transfer-no-ribbon-saving") == 0)
-    {
       ribbon_char = '2';
-    }
   }
 
-  snprintf(
-    command,
-    sizeof(command),
-    "{T%c%c%c%c%c|}\n",
-    sensor_char,
-    cut_char,
-    feed_mode_char,
-    speed_char,
-    ribbon_char
-  );
-  papplDevicePuts(device, command);
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+  // Send feed command
+  tpcl_cmd_feed(device, sensor_char, cut_char, feed_mode_char, speed_char, ribbon_char, NULL, printer);
 
   papplDeviceFlush(device);
   ippDelete(printer_attrs);
@@ -1018,8 +993,6 @@ tpcl_rstartjob_cb(
 {
   papplLogJob(job, PAPPL_LOGLEVEL_INFO, "Starting TPCL print job");
 
-  char command[256];
-
   // Get printer handle for IPP attribute access
   pappl_printer_t *printer = papplJobGetPrinter(job);
   if (!printer)
@@ -1148,17 +1121,7 @@ tpcl_rstartjob_cb(
   }
 
   // Send label size command
-  snprintf(
-    command,
-    sizeof(command),
-    "{D%04d,%04d,%04d,%04d|}\n",
-    tpcl_job->label_pitch,                               // label pitch
-    tpcl_job->print_width,                               // label width
-    tpcl_job->print_height,                              // label length
-    tpcl_job->roll_width                                 // full width of label roll
-  );
-  papplDevicePuts(device, command);
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
+  tpcl_cmd_label_size(device, tpcl_job->label_pitch, tpcl_job->print_width, tpcl_job->print_height, tpcl_job->roll_width, job, NULL);
 
   // Send feed adjustment command - only send when necessary (when any value != 0)
   // Get feed adjustment values from printer settings using helper function
@@ -1168,20 +1131,10 @@ tpcl_rstartjob_cb(
   // Only send AX command if at least one adjustment value is non-zero
   if (has_adjustments)
   {
-    // Format: {AX;+/-bbb,+/-ddd,+/-ff|}
     // Feed: negative = forward (-), positive = backward (+)
     // Cut position: negative = forward (-), positive = backward (+)
     // Backfeed: negative = decrease (-), positive = increase (+)
-    snprintf(
-      command,
-      sizeof(command),
-      "{AX;%c%03d,%c%03d,%c%02d|}\n",
-      (feed_adjustment >= 0) ? '+' : '-', abs(feed_adjustment),
-      (cut_position_adjustment >= 0) ? '+' : '-', abs(cut_position_adjustment),
-      (backfeed_adjustment >= 0) ? '+' : '-', abs(backfeed_adjustment)
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustment command: %s", command);
+    tpcl_cmd_position_adjust(device, feed_adjustment, cut_position_adjustment, backfeed_adjustment, job, NULL);
   }
   else
   {
@@ -1217,16 +1170,7 @@ tpcl_rstartjob_cb(
         papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Media type: %s, AY mode: %c", media_type, mode_char);
       }
 
-      snprintf(
-        command,
-        sizeof(command),
-        "{AY;%c%02d,%c|}\n",
-        (print_darkness >= 0) ? '+' : '-',
-        abs(print_darkness),
-        mode_char
-      );
-      papplDevicePuts(device, command);
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
+      tpcl_cmd_darkness_adjust(device, print_darkness, mode_char, job, NULL);
     }
   }
   else
@@ -1282,18 +1226,7 @@ tpcl_rstartjob_cb(
           ribbon_char = '2';
       }
 
-      snprintf(
-        command,
-        sizeof(command),
-        "{T%c%c%c%c%c|}\n",
-        sensor_char,
-        cut_char,
-        feed_mode_char,
-        speed_char,
-        ribbon_char
-      );
-      papplDevicePuts(device, command);
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+      tpcl_cmd_feed(device, sensor_char, cut_char, feed_mode_char, speed_char, ribbon_char, job, NULL);
     }
   }
 
@@ -1320,8 +1253,6 @@ tpcl_rstartpage_cb(
 {
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Starting page %u", page);
 
-  char command[256];
-
   // Fetch the job driver data pointer
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   if (!tpcl_job)
@@ -1331,8 +1262,7 @@ tpcl_rstartpage_cb(
   }
 
   // Clear image buffer command
-  papplDevicePuts(device, "{C|}\n");
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: {C|}");
+  tpcl_cmd_clear_buffer(device, job, NULL);
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -1345,19 +1275,7 @@ tpcl_rstartpage_cb(
   else
   {
     // For hex and nibble mode, send the SG command header
-    snprintf(
-      command,
-      sizeof(command),
-      "{SG;0000,00000,%04u,%05u,%d,",
-                                                         // x_origin
-                                                         // y_origin
-      options->header.cupsWidth,                         // width_dots
-      options->header.cupsHeight,                        // height_dots
-      tpcl_job->gmode                                    // graphics mode
-    );
-    papplDevicePuts(device, command);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending graphic command header (width, height, mode): %s", command);
-
+    tpcl_cmd_graphics_header(device, 0, 0, options->header.cupsWidth, options->header.cupsHeight, tpcl_job->gmode, job, NULL);
   }
   return true;
 }
@@ -1602,8 +1520,6 @@ tpcl_rendpage_cb(
 {
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Ending page %u", page);
 
-  char command[256];
-
   // Fetch the job driver data pointer
   tpcl_job_t *tpcl_job = (tpcl_job_t *)papplJobGetData(job);
   if (!tpcl_job)
@@ -1701,22 +1617,8 @@ tpcl_rendpage_cb(
   // h: Type of status response (0 = not needed)
   char status_response_char = '0';
 
-  // Build the XS command
-  snprintf(
-    command,
-    sizeof(command),
-    "{XS;I,%04d,%03d%c%c%c%c%c%c|}\n",
-    num_copies,
-    cut_interval,
-    sensor_char,
-    feed_mode_char,
-    speed_char,
-    ribbon_char,
-    rotation_char,
-    status_response_char
-  );
-  papplDevicePuts(device, command);
-  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending issue label command: %s", command);
+  // Send the XS command
+  tpcl_cmd_issue_label(device, num_copies, cut_interval, sensor_char, feed_mode_char, speed_char, ribbon_char, rotation_char, status_response_char, job, NULL);
 
   ippDelete(printer_attrs);
   papplDeviceFlush(device);
@@ -1775,7 +1677,6 @@ const char* tpcl_testpage_cb(
 {
   pappl_device_t           *device;                      // Printer device connection
   pappl_pr_driver_data_t   driver_data;                  // Driver data
-  char                     command[256];                 // Command buffer
   int                      print_width;                  // Effective print width (0.1mm)
   int                      print_height;                 // Effective print height (0.1mm)
   int                      label_pitch;                  // Label pitch with gap (0.1mm)
@@ -1816,17 +1717,7 @@ const char* tpcl_testpage_cb(
   tpcl_get_label_dimensions(printer_attrs, print_width, print_height, &label_pitch, &roll_width, NULL, printer);
 
   // Send label size command
-  snprintf(
-    command,
-    sizeof(command),
-    "{D%04d,%04d,%04d,%04d|}\n",
-    label_pitch,
-    print_width,
-    print_height,
-    roll_width
-  );
-  papplDevicePuts(device, command);
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
+  tpcl_cmd_label_size(device, label_pitch, print_width, print_height, roll_width, NULL, printer);
 
   // 2. AX command - Feed adjustment (only if values are non-zero)
   int feed_adjustment, cut_position_adjustment, backfeed_adjustment;
@@ -1835,16 +1726,7 @@ const char* tpcl_testpage_cb(
   // Only send AX command if at least one adjustment value is non-zero
   if (has_adjustments)
   {
-    snprintf(
-      command,
-      sizeof(command),
-      "{AX;%c%03d,%c%03d,%c%02d|}\n",
-      (feed_adjustment >= 0) ? '+' : '-', abs(feed_adjustment),
-      (cut_position_adjustment >= 0) ? '+' : '-', abs(cut_position_adjustment),
-      (backfeed_adjustment >= 0) ? '+' : '-', abs(backfeed_adjustment)
-    );
-    papplDevicePuts(device, command);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed adjustment command: %s", command);
+    tpcl_cmd_position_adjust(device, feed_adjustment, cut_position_adjustment, backfeed_adjustment, NULL, printer);
   }
   else
   {
@@ -1867,16 +1749,7 @@ const char* tpcl_testpage_cb(
       papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Media type: %s, AY mode: %c", media_type, mode_char);
     }
 
-    snprintf(
-      command,
-      sizeof(command),
-      "{AY;%c%02d,%c|}\n",
-      (print_darkness >= 0) ? '+' : '-',
-      abs(print_darkness),
-      mode_char
-    );
-    papplDevicePuts(device, command);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending print density adjustment command: %s", command);
+    tpcl_cmd_darkness_adjust(device, print_darkness, mode_char, NULL, printer);
   }
   else
   {
@@ -1922,24 +1795,11 @@ const char* tpcl_testpage_cb(
         ribbon_char = '2';
     }
 
-    snprintf(
-      command,
-      sizeof(command),
-      "{T%c%c%c%c%c|}\n",
-      sensor_char,
-      cut_char,
-      feed_mode_char,
-      speed_char,
-      ribbon_char
-    );
-    papplDevicePuts(device, command);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending feed command: %s", command);
+    tpcl_cmd_feed(device, sensor_char, cut_char, feed_mode_char, speed_char, ribbon_char, NULL, printer);
   }
 
   // Send clear image buffer command
-  snprintf(command, sizeof(command), "{C|}\n");
-  papplDevicePuts(device, command);
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending clear image buffer command: %s", command);
+  tpcl_cmd_clear_buffer(device, NULL, printer);
 
   // 6. LC command - Line format command - draw concentric boxes
   int box_spacing = 45;                                  // Spacing between boxes in 0.1mm
@@ -1975,20 +1835,8 @@ const char* tpcl_testpage_cb(
     }
 
     // Draw the box using LC command
-    // {LC;aaaa,bbbb,cccc,dddd,e,f|}
     // e=1 for rectangle, f=line width in dots
-    snprintf(
-      command,
-      sizeof(command),
-      "{LC;%04d,%04d,%04d,%04d,1,%d|}\n",
-      x1,
-      y1,
-      x2,
-      y2,
-      line_width_dots
-    );
-    papplDevicePuts(device, command);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending LC command for box %d: %s", box_num, command);
+    tpcl_cmd_line(device, x1, y1, x2, y2, 1, line_width_dots, NULL, printer);
   }
 
   // 7. XS command - Issue label
@@ -2027,21 +1875,8 @@ const char* tpcl_testpage_cb(
   // h: Type of status response (0 = not needed)
   char status_response_char = '0';
 
-  snprintf(
-    command,
-    sizeof(command),
-    "{XS;I,%04d,%03d%c%c%c%c%c%c|}\n",
-    num_copies,
-    cut_interval,
-    sensor_char,
-    feed_mode_char,
-    speed_char,
-    ribbon_char,
-    rotation_char,
-    status_response_char
-  );
-  papplDevicePuts(device, command);
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending issue label command: %s", command);
+  // Send XS command
+  tpcl_cmd_issue_label(device, num_copies, cut_interval, sensor_char, feed_mode_char, speed_char, ribbon_char, rotation_char, status_response_char, NULL, printer);
 
   papplDeviceFlush(device);
 

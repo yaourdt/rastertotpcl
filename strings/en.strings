@@ -26,6 +26,10 @@
 "dithering-algorithm.threshold" = "Threshold";
 "dithering-algorithm.bayer" = "Bayer";
 "dithering-algorithm.clustered" = "Clustered";
+"dithering-algorithm-photo" = "Dithering Algorithm (Photo)";
+"dithering-algorithm-photo.threshold" = "Threshold";
+"dithering-algorithm-photo.bayer" = "Bayer";
+"dithering-algorithm-photo.clustered" = "Clustered";
 "dithering-threshold" = "Dithering Threshold";
 "feed-adjustment" = "Feed Adjustment (0.1mm)";
 "cut-position-adjustment" = "Cut Position Adjustment (0.1mm)";

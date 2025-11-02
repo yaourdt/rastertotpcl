@@ -112,6 +112,9 @@ tpcl_setup_vendor_options(
   // Dithering algorithm selection
   tpcl_add_vendor_str_option(driver_data, driver_attrs, "dithering-algorithm", 3, (const char *[]){"threshold", "bayer", "clustered"}, "threshold");
 
+  // Dithering algorithm selection for photo content
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "dithering-algorithm-photo", 3, (const char *[]){"threshold", "bayer", "clustered"}, "threshold");
+
   // Dithering threshold level (0-255, only used with 'threshold' algorithm)
   tpcl_add_vendor_int_option(driver_data, driver_attrs, "dithering-threshold", 0, 255, 128);
 
@@ -138,23 +141,37 @@ tpcl_setup_driver_common(
   ipp_t                    **driver_attrs
 )
 {
-  // Configure dithering based on default IPP attributes
+  // Configure dithering for general content based on default IPP attributes
   const char *dither_algo = tpcl_get_str_option(*driver_attrs, "dithering-algorithm", "threshold", NULL, NULL);
 
   if (strcmp(dither_algo, "bayer") == 0)
   {
     dither_bayer16(driver_data->gdither);                // Dithering for 'auto', 'text', and 'graphic'
-    dither_bayer16(driver_data->pdither);                // Dithering for 'photo' (currently not supported)
   }
   else if (strcmp(dither_algo, "clustered") == 0)
   {
     dither_clustered16(driver_data->gdither);
-    dither_clustered16(driver_data->pdither);
   }
   else
   {
     int dither_threshold = tpcl_get_int_option(*driver_attrs, "dithering-threshold", 128, NULL, NULL);
     dither_threshold16(driver_data->gdither, (unsigned char)dither_threshold);
+  }
+
+  // Configure dithering for photo content based on separate photo algorithm option
+  const char *dither_algo_photo = tpcl_get_str_option(*driver_attrs, "dithering-algorithm-photo", "threshold", NULL, NULL);
+
+  if (strcmp(dither_algo_photo, "bayer") == 0)
+  {
+    dither_bayer16(driver_data->pdither);                // Dithering for 'photo'
+  }
+  else if (strcmp(dither_algo_photo, "clustered") == 0)
+  {
+    dither_clustered16(driver_data->pdither);
+  }
+  else
+  {
+    int dither_threshold = tpcl_get_int_option(*driver_attrs, "dithering-threshold", 128, NULL, NULL);
     dither_threshold16(driver_data->pdither, (unsigned char)dither_threshold);
   }
 

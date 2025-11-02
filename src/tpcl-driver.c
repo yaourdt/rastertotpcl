@@ -32,9 +32,9 @@
  */
 
 #ifdef __APPLE__
-  #define TPCL_STATE_DIR "/Library/Caches/tpcl-printer-app"
+  #define TPCL_STATE_DIR "/Library/Application Support/tpcl-printer-app"
 #else
-  #define TPCL_STATE_DIR "/var/cache/tpcl-printer-app"
+  #define TPCL_STATE_DIR "/usr/local/etc/tpcl-printer-app"
 #endif
 
 /*

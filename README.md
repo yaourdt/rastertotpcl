@@ -1,81 +1,236 @@
-# Toshiba TEC TPCL CUPS Raster Driver - rastertotpcl
+# Toshiba TEC TPCL Printer Application
 
 ## Introduction
 
-A driver to Toshiba TEC Label printers supporting the TEC Printer Command Language or TPCL,
-version 2.
+This is a printer driver for Toshiba TEC label printers that use the TPCL (TEC Printer Command Language) version 2 protocol. It modernizes the original rastertotpcl driver to work with current **Linux** and **macOS** systems.
 
-Converts CUPS Raster graphics along with a supported PPD file into a TPCL graphic ready to
-be printed directly. As of yet, there is no support for sending text to the driver.
+Modern operating systems (or more precisely modern versions of CUPS) have moved away from the old PPD-based printing system. This driver has been updated to work seamlessly with these newer systems, allowing the continued use of Toshiba TEC label printers without compatibility issues.
 
-Conversion includes support for the TPCL TOPIX compression algorithm for reliable and fast
-delivery of print jobs to the printer. Raw 8-bit graphics direct from the raster driver
-are also supported but not recommended.
+In order to do so, the driver emulates an IPP-compatible printer and provides a convenient web-based interface for configuring printer settings.
 
-This repository is a fork with some minor improvements, so the driver will compile on recent
-systems. It was tested on MacOS Big Sur and Debian Buster. The original source can be found
-at [samlown/rastertotpcl](http://github.com/samlown/rastertotpcl).
-
-Pull requests to this project are very welcome, as the original repository seems to be
-no longer maintained.
-
-Eventually, this project should move to [PAPPL](https://github.com/michaelrsweet/pappl/),
-as CUPS printer drivers are deprecated.
+This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14**. If you test with other models, encounter bugs, or can provide specifications for new devices, please [open an issue](https://github.com/yaourdt/rastertotpcl/issues). I will respond as soon as possible, though please note this project is maintained in my spare time.
 
 ## Supported Printers
 
-Support for the following printers is included by the PPD files:
+The following Toshiba TEC label printers are supported. For detailed specifications including print speeds, resolutions, and supported media types, see [printer_properties.md](printer_properties.md).
 
- * Toshiba TEC B-SA4G/T     (tecbas4.ppd)
- * Toshiba TEC B-SX4        (tecbsx4.ppd)
- * Toshiba TEC B-SX5        (tecbsx5.ppd)
- * Toshiba TEC B-SX6        (tecbsx6.ppd)
- * Toshiba TEC B-SX8        (tecbsx8.ppd)
- * Toshiba TEC B-852R       (tecb852r.ppd)
- * Toshiba TEC B-SV4D       (tecbsv4d.ppd)
- * Toshiba TEC B-SV4T       (tecbsv4t.ppd)
- * Toshiba TEC B-EV4D-GS14  (tecbev4d.ppd)
- * Toshiba TEC B-EV4T-GS14  (tecbev4t.ppd)
+| Model | Resolution(s) | Thermal Transfer¹ |
+|-------|---------------|-------------------|
+| B-SA4G | 203dpi | Yes |
+| B-SA4T | 300dpi | No |
+| B-SX4 | 203dpi | Yes |
+| B-SX5 | 203dpi, 300dpi | Yes |
+| B-SX6 | 203dpi, 300dpi | Yes |
+| B-SX8 | 203dpi, 300dpi | Yes |
+| B-482 | 203dpi, 300dpi | Yes |
+| B-572 | 203dpi, 300dpi | Yes |
+| B-852R | 300dpi | Yes |
+| B-SV4D | 203dpi | Yes |
+| B-SV4T | 203dpi | Yes |
+| B-EV4D-GS14 | 203dpi | Yes |
+| B-EV4T-GS14 | 203dpi | Yes |
 
-There is little variation between these printers other than resolutions, speeds, and accepted media types,
-so new printer models can be tested or added easily.
+<sub>¹ All printers support Direct Thermal mode.</sub>
 
-Thorough testing has been performed on the B-SX4 model by the original authors. This fork was validated
-against a B-EV4D model. Please get in touch if you test the drivers on other printers with success, or run
-into problems.
+There is little variation between these printers other than resolutions, speeds, and accepted media types, so new printer models can be tested or added easily.
 
-## Installation
+## Starting the Server
 
-### Linux prerequisites
+### Basic Usage
 
-The CUPS development headers and ppd compiler are required before compilation. On Debian or Ubuntu, these can
-be installed with:
+To start the printer application server:
+
+```bash
+sudo ./bin/tpcl-printer-app server
+```
+
+View available command-line options:
+
+```bash
+./bin/tpcl-printer-app --help
+```
+
+## Web Interface
+
+Once the server is running, access the web interface at:
 
 ```
-sudo apt-get install build-essential libcups2-dev cups-ppdc
+http://localhost:8000
 ```
 
-### MacOS prerequisites
-
-Download XCode and install it.
-
-### Install (both Linux and MacOS)
-
-The easiest way to install from source is to run the following from the base directory:
+Or if running on a remote machine:
 
 ```
+http://<hostname>:8000
+```
+
+### Web Interface Options
+
+The web interface provides the following configuration options:
+
+#### Media and Label Settings
+
+- **Label Gap**: Gap between labels in 0.1mm units (0-200, default: 50)
+- **Horizontal Roll Margin**: Width difference between backing paper and label in 0.1mm units (0-300, default: 10)
+- **Sensor Type**: Method for detecting labels
+  - None
+  - Reflective
+  - Transmissive (default)
+  - Reflective Pre-Print
+  - Transmissive Pre-Print
+
+#### Label Processing
+
+- **Cut Label**: Enable or disable label cutting if cutter is installed
+  - Non-Cut (default)
+  - Cut
+- **Cut Interval**: Number of labels to print before cutting (0-100, 0=no cut, default: 0)
+- **Feed Mode**: Label feeding behavior if peel off device is insalled
+  - Batch Mode (default)
+  - Strip Mode (Backfeed with Sensor)
+  - Strip Mode (Backfeed without Sensor)
+  - Partial Cut Mode
+- **Feed on Label Size Change**: Whether to feed when label size changes (Yes/No, default: Yes). Should be enabled for most printers to not result in a command error.
+
+#### Fine-Tuning Adjustments
+
+- **Feed Adjustment**: Fine-tune label feed position in 0.1mm units (-500 to 500, negative=forward, positive=backward, default: 0)
+- **Cut Position Adjustment**: Fine-tune cut position if cutter installed in 0.1mm units (-180 to 180, negative=forward, positive=backward, default: 0)
+- **Backfeed Adjustment**: Fine-tune backfeed amount in 0.1mm units (-99 to 99, negative=decrease, positive=increase, default: 0)
+- **Print Speed**: Printing speed in arbitrary units (varies by model). See [printer_properties.md](printer_properties.md) to convert to inches / second.
+- **Print Darkness**: Darkness adjustment (-10 to 10, default: 0)
+
+#### Graphics and Printing (only for expert use)
+
+- **Data Transmission Mode**: How graphics data is sent to the printer
+  - Nibble AND
+  - Hex AND
+  - TOPIX (default, recommended for best performance)
+  - Nibble OR
+  - Hex OR
+- **Dithering Algorithm**: Algorithm for converting grayscale to black & white
+  - Threshold (default)
+  - Bayer
+  - Clustered
+- **Dithering Algorithm (Photo)**: Separate dithering algorithm for photo content
+  - Threshold (default)
+  - Bayer
+  - Clustered
+- **Dithering Threshold**: Threshold level when using threshold algorithm (0-255, default: 128)
+
+### Printer Identification
+
+The "Identify Printer" function in the web interface will feed a single blank label to help you identify which physical printer corresponds to the application.
+
+### Test Page
+
+The test page prints concentric boxes that are useful for verifying label positioning and making fine adjustments to margins and alignment.
+
+## Sending Commands Directly to the Printer
+
+You can send TPCL commands directly to the printer for testing or advanced operations. See the `/tests` directory for examples of direct command scripts.
+
+## Build Instructions
+
+### Build Tools and Dependencies
+
+**For Linux (openSUSE/SUSE):**
+
+```bash
+sudo zypper install gcc gcc-c++ make pkg-config \
+    cups-devel libppd libppd-devel cups-ddk \
+    libjpeg8-devel libpng16-devel zlib-devel \
+    libavahi-devel libopenssl-devel libusb-1_0-devel pam-devel \
+    ImageMagick
+```
+
+**For Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt-get install build-essential gcc make pkg-config \
+    libcups2-dev libjpeg-dev libpng-dev zlib1g-dev \
+    libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \ 
+    imagemagick
+```
+
+**For macOS:**
+
+```bash
+brew install cups libjpeg libpng zlib openssl libusb imagemagick
+```
+
+### Building
+
+**Full build** (including PAPPL framework):
+
+```bash
+make full
+```
+
+**Quick build** (without rebuilding PAPPL):
+
+```bash
 make
-sudo make install
 ```
 
-This will install the filter and PPD files in the standard CUPS filter and PPD directories
-and show them in the CUPS printer selection screens.
+**Further build options**
 
-To remove driver and all its components, run
+```bash
+make help
+```
 
+### Build Notes
+
+- Translations are patched directly into PAPPL during the build process. See `/scripts` for details.
+- ImageMagick is used to convert icon images to C header files during the build.
+
+## Technical Details
+
+This is an IPP (Internet Printing Protocol) Printer Application built on the [PAPPL framework](https://github.com/michaelrsweet/pappl/). PAPPL is a modern printer application framework that replaces the older PPD-based system used by CUPS.
+
+The printer application converts raster graphics into TPCL commands with support for TOPIX compression for reliable and fast delivery of print jobs. It provides full IPP support, allowing the printer to be accessed over the network using standard printing protocols.
+
+### Viewing Logs
+
+Run with debug logging enabled:
+
+```bash
+sudo ./bin/tpcl-printer-app server -o log-level=debug
 ```
-sudo make uninstall
+
+Monitor the application logs in debug mode:
+
+```bash
+sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 ```
+
+### Configuration Files
+
+| File | Purpose | Example Name | Location |
+|------|---------|--------------|----------|
+| Configuration file | Stores server options | `tpcl-printer-app.conf` | `/etc`, `/usr/local/etc`, `$HOME/snap/<BASENAME>/common` (Snap), `/Library/Application Support` (macOS) |
+| State file | Stores printer and job states | `tpcl-printer-app.state` | Same as configuration file locations |
+
+**Additional settings directories:**
+
+* macOS: `/Library/Application Support/tpcl-printer-app/`
+* Unix/Linux: `/usr/local/etc/tpcl-printer-app/`
+
+**Logs:**
+
+* Default: system logging provider
+* Debug mode: `/tmp/pappl<pid>.log`
+* Nibble mode dump (debug only): `/tmp/rastertotpcl-nibble-dump-%d.out`
+
+## Project History
+
+This project began as the rastertotpcl PPD-based CUPS filter and has been migrated to a modern IPP Printer Application based on the PAPPL framework.
+
+### Original PPD-Based Implementation
+
+The original rastertotpcl driver converted CUPS Raster graphics along with a supported PPD file into TPCL graphics ready to be printed directly. It included support for the TPCL TOPIX compression algorithm for reliable and fast delivery of print jobs to the printer.
+
+The original source can be found at [samlown/rastertotpcl](http://github.com/samlown/rastertotpcl).
 
 ## License
 
@@ -93,8 +248,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ## Authors
-rastertotpcl is based on the rastertotec driver written by Patick Kong (SKE s.a.r.l).
-rastertotec is based on the rastertolabel driver included with the CUPS printing system by Easy Software Products.
-Packaing of rastertotpcl and TOPIX compression was added by Sam Lown (www.samlown.com).
-Original MacOS adaption by [Milverton](https://milverton.typepad.com/the-hairy-mouse/2011/10/print-to-toshiba-tec-b-ev4d-gs14-on-os-x.html).
-This fork is maintained by Mark Dornbach (yaourdt).
+
+- **rastertotpcl** is based on the **rastertotec** driver written by Patrick Kong (SKE s.a.r.l)
+- **rastertotec** is based on the **rastertolabel** driver included with the CUPS printing system by Easy Software Products
+- Packaging of rastertotpcl and TOPIX compression was added by Sam Lown (www.samlown.com)
+- Original MacOS adaptation by [Milverton](https://milverton.typepad.com/the-hairy-mouse/2011/10/print-to-toshiba-tec-b-ev4d-gs14-on-os-x.html)
+- PAPPL migration and current maintenance by Mark Dornbach (yaourdt)

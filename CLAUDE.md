@@ -46,10 +46,6 @@ The user will issue test jobs.
 - **IPP** - Internet Printing Protocol
 - **TPCL v2** - Toshiba Tec Printer Command Language version 2
 
-## Current Status
-
-Project is generally working, we are now fixing smaller issues and getting ready for packagning.
-
 ## Git Information
 
 - Current branch: `release/0.2.0`

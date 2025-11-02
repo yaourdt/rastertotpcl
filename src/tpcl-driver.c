@@ -248,6 +248,59 @@ static bool tpcl_save_printer_state(
   const tpcl_printer_state_t *state
 );
 
+static int tpcl_get_int_option(
+  ipp_t                    *attrs,
+  const char               *name,
+  int                      default_val,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+);
+
+static const char* tpcl_get_str_option(
+  ipp_t                    *attrs,
+  const char               *name,
+  const char               *default_val,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+);
+
+static void tpcl_add_vendor_int_option(
+  pappl_pr_driver_data_t   *driver_data,
+  ipp_t                    **driver_attrs,
+  const char               *name,
+  int                      min,
+  int                      max,
+  int                      default_val
+);
+
+static void tpcl_add_vendor_str_option(
+  pappl_pr_driver_data_t   *driver_data,
+  ipp_t                    **driver_attrs,
+  const char               *name,
+  int                      num_values,
+  const char               **values,
+  const char               *default_val
+);
+
+static bool tpcl_get_label_dimensions(
+  ipp_t                    *printer_attrs,
+  int                      print_width,
+  int                      print_height,
+  int                      *label_pitch,
+  int                      *roll_width,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+);
+
+static bool tpcl_get_feed_adjustments(
+  ipp_t                    *printer_attrs,
+  int                      *feed_adjustment,
+  int                      *cut_position_adjustment,
+  int                      *backfeed_adjustment,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+);
+
 
 /*
  * 'tpcl_driver_cb()' - Main driver callback
@@ -288,95 +341,51 @@ tpcl_driver_cb(
   driver_data->num_vendor = 0;                           // Number of available vendor options
   if (!*driver_attrs) *driver_attrs = ippNew();          // Create IPP attributes to describe above vendor options
 
-  // - Gap beween labels in units of 0.1mm
-  driver_data->vendor[driver_data->num_vendor] = "label-gap";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "label-gap-supported",  0, 200);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "label-gap-default"  , 50     );
-  driver_data->num_vendor++;
+  // Gap between labels in units of 0.1mm
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "label-gap", 0, 200, 50);
 
-  // - Roll margin in units of 0.1mm (width difference between backing paper and label)
-  driver_data->vendor[driver_data->num_vendor] = "roll-margin";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "roll-margin-supported",  0, 300);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "roll-margin-default"  , 10     );
-  driver_data->num_vendor++;
+  // Roll margin in units of 0.1mm (width difference between backing paper and label)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "roll-margin", 0, 300, 10);
 
-  // - Sensor type for label detection
-  driver_data->vendor[driver_data->num_vendor] = "sensor-type";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-supported", 5, NULL, (const char *[]){"none", "reflective", "transmissive", "reflective-pre-print", "transmissive-pre-print"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "sensor-type-default", NULL, "transmissive");
-  driver_data->num_vendor++;
+  // Sensor type for label detection
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "sensor-type", 5, (const char *[]){"none", "reflective", "transmissive", "reflective-pre-print", "transmissive-pre-print"}, "transmissive");
 
-  //  - Cut/non-cut selection
-  driver_data->vendor[driver_data->num_vendor] = "label-cut";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-supported", 2, NULL, (const char *[]){"non-cut", "cut"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "label-cut-default", NULL, "non-cut");
-  driver_data->num_vendor++;
+  // Cut/non-cut selection
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "label-cut", 2, (const char *[]){"non-cut", "cut"}, "non-cut");
 
-  // - Cut interval (number of labels before cutting, 0=no cut, 1-100)
-  driver_data->vendor[driver_data->num_vendor] = "cut-interval";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "cut-interval-supported", 0, 100);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "cut-interval-default"  , 0);
-  driver_data->num_vendor++;
+  // Cut interval (number of labels before cutting, 0=no cut, 1-100)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "cut-interval", 0, 100, 0);
 
-  // - Feed mode selection
-  driver_data->vendor[driver_data->num_vendor] = "feed-mode";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-supported", 4, NULL, (const char *[]){"batch", "strip-backfeed-sensor", "strip-backfeed-no-sensor", "partial-cut"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-mode-default", NULL, "batch");
-  driver_data->num_vendor++;
+  // Feed mode selection
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "feed-mode", 4, (const char *[]){"batch", "strip-backfeed-sensor", "strip-backfeed-no-sensor", "partial-cut"}, "batch");
 
-  // - Feed on label size change?
-  driver_data->vendor[driver_data->num_vendor] = "feed-on-label-size-change";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-supported", 2, NULL, (const char *[]){"yes", "no"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "feed-on-label-size-change-default", NULL, "yes");
-  driver_data->num_vendor++;
+  // Feed on label size change?
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "feed-on-label-size-change", 2, (const char *[]){"yes", "no"}, "yes");
 
-  // - Graphics mode selection
-  driver_data->vendor[driver_data->num_vendor] = "graphics-mode";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-supported", 5, NULL, (const char *[]){"nibble-and", "hex-and", "topix", "nibble-or", "hex-or"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "graphics-mode-default", NULL, "topix");
-  driver_data->num_vendor++;
+  // Graphics mode selection
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "graphics-mode", 5, (const char *[]){"nibble-and", "hex-and", "topix", "nibble-or", "hex-or"}, "topix");
 
-  // - Dithering algorithm selection
-  driver_data->vendor[driver_data->num_vendor] = "dithering-algorithm";
-  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "dithering-algorithm-supported", 3, NULL, (const char *[]){"threshold", "bayer", "clustered"});
-  ippAddString (*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, "dithering-algorithm-default", NULL, "threshold");
-  driver_data->num_vendor++;
+  // Dithering algorithm selection
+  tpcl_add_vendor_str_option(driver_data, driver_attrs, "dithering-algorithm", 3, (const char *[]){"threshold", "bayer", "clustered"}, "threshold");
 
-  // - Dithering threshold level (0-255, only used with 'threshold' algorithm)
-  driver_data->vendor[driver_data->num_vendor] = "dithering-threshold";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "dithering-threshold-supported", 0, 255);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "dithering-threshold-default"  , 128);
-  driver_data->num_vendor++;
+  // Dithering threshold level (0-255, only used with 'threshold' algorithm)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "dithering-threshold", 0, 255, 128);
 
-  // - Feed adjustment value (-500 to 500 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
-  driver_data->vendor[driver_data->num_vendor] = "feed-adjustment";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "feed-adjustment-supported", -500, 500);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "feed-adjustment-default"  , 0);
-  driver_data->num_vendor++;
+  // Feed adjustment value (-500 to 500 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "feed-adjustment", -500, 500, 0);
 
-  // - Cut position adjustment value (-180 to 180 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
-  driver_data->vendor[driver_data->num_vendor] = "cut-position-adjustment";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "cut-position-adjustment-supported", -180, 180);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "cut-position-adjustment-default"  , 0);
-  driver_data->num_vendor++;
+  // Cut position adjustment value (-180 to 180 in 0.1mm units, negative = forward, positive = backward, 0 = no adjustment)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "cut-position-adjustment", -180, 180, 0);
 
-  // - Backfeed adjustment value (-99 to 99 in 0.1mm units, negative = decrease, positive = increase, 0 = no adjustment)
-  driver_data->vendor[driver_data->num_vendor] = "backfeed-adjustment";
-  ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "backfeed-adjustment-supported", -99, 99);
-  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "backfeed-adjustment-default"  , 0);
-  driver_data->num_vendor++;
+  // Backfeed adjustment value (-99 to 99 in 0.1mm units, negative = decrease, positive = increase, 0 = no adjustment)
+  tpcl_add_vendor_int_option(driver_data, driver_attrs, "backfeed-adjustment", -99, 99, 0);
 
   //
   // Model-agnostic printer options
   //
 
   // Configure dithering based on default IPP attributes
-  const char *dither_algo = "threshold";
-  ipp_attribute_t *dither_algo_attr = ippFindAttribute(*driver_attrs, "dithering-algorithm-default", IPP_TAG_KEYWORD);
-  if (dither_algo_attr)
-  {
-    dither_algo = ippGetString(dither_algo_attr, 0, NULL);
-  }
+  const char *dither_algo = tpcl_get_str_option(*driver_attrs, "dithering-algorithm", "threshold", NULL, NULL);
 
   if (strcmp(dither_algo, "bayer") == 0)
   {
@@ -390,12 +399,7 @@ tpcl_driver_cb(
   }
   else
   {
-    int dither_threshold = 128;
-    ipp_attribute_t *dither_threshold_attr = ippFindAttribute(*driver_attrs, "dithering-threshold-default", IPP_TAG_INTEGER);
-    if (dither_threshold_attr)
-    {
-      dither_threshold = ippGetInteger(dither_threshold_attr, 0);
-    }
+    int dither_threshold = tpcl_get_int_option(*driver_attrs, "dithering-threshold", 128, NULL, NULL);
     dither_threshold16(driver_data->gdither, (unsigned char)dither_threshold);
     dither_threshold16(driver_data->pdither, (unsigned char)dither_threshold);
   }
@@ -497,10 +501,7 @@ tpcl_driver_cb(
       driver_data->speed_supported[0] = 0;               // Min
       driver_data->speed_supported[1] = 0;               // Max
       driver_data->speed_default      = 0;               // Default
-      driver_data->vendor[driver_data->num_vendor] = "print-speed";
-      ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "print-speed-supported", tpcl_printer_properties[i].print_speeds[0], tpcl_printer_properties[i].print_speeds[2]);
-      ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "print-speed-default", tpcl_printer_properties[i].print_speeds[1]);
-      driver_data->num_vendor++;
+      tpcl_add_vendor_int_option(driver_data, driver_attrs, "print-speed", tpcl_printer_properties[i].print_speeds[0], tpcl_printer_properties[i].print_speeds[2], tpcl_printer_properties[i].print_speeds[1]);
       papplLog(system, PAPPL_LOGLEVEL_DEBUG, "Print speed settings: min=%d, default=%d, max=%d", tpcl_printer_properties[i].print_speeds[0], tpcl_printer_properties[i].print_speeds[1], tpcl_printer_properties[i].print_speeds[2]); 
 
       // Supported media (label) sizes. We use roll media for label printers, which allows any size within range
@@ -572,10 +573,7 @@ tpcl_driver_cb(
       driver_data->darkness_supported           =     0; // Printer darkness
       driver_data->darkness_default             =     0; // Default darkness adjustment at printer power-on
       driver_data->darkness_configured          =     0; // Currently configured printing darkness
-      driver_data->vendor[driver_data->num_vendor] = "print-darkness";
-      ippAddRange  (*driver_attrs, IPP_TAG_PRINTER,                  "print-darkness-supported", -10, 10);
-      ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, "print-darkness-default",         0);
-      driver_data->num_vendor++;
+      tpcl_add_vendor_int_option(driver_data, driver_attrs, "print-darkness", -10, 10, 0);
 
       // Default media
       driver_data->media_default = driver_data->media_ready[0];
@@ -843,33 +841,8 @@ void tpcl_identify_cb(
     return;
   }
 
-  // Get label gap from printer settings (0.1mm)
-  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
-  if (gap_attr)
-  {
-    label_pitch = print_height + ippGetInteger(gap_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_pitch - print_height);
-  }
-  else
-  {
-    label_pitch = print_height + 50;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
-  }
-
-  // Get roll margin from printer settings (0.1mm)
-  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
-  if (margin_attr)
-  {
-    roll_width = print_width + ippGetInteger(margin_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_width - print_width);
-  }
-  else
-  {
-    roll_width  = print_width + 10;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
-  }
-
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
+  // Get label dimensions using helper function
+  tpcl_get_label_dimensions(printer_attrs, print_width, print_height, &label_pitch, &roll_width, NULL, printer);
 
   // Validate dimensions are within printer limits
   // 203dpi: pitch max 9990 (999.0mm), height max 9970 (997.0mm)
@@ -1148,38 +1121,24 @@ tpcl_rstartjob_cb(
   papplJobSetData(job, tpcl_job);
 
   // Set graphics mode from vendor options
-  const char *graphics_mode = NULL;
-  ipp_attribute_t *graphics_mode_attr = ippFindAttribute(printer_attrs, "graphics-mode-default", IPP_TAG_KEYWORD);
-  if (graphics_mode_attr)
-  {
-    graphics_mode = ippGetString(graphics_mode_attr, 0, NULL);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved graphics mode from printer settings: %s", graphics_mode);
-  }
-  if (graphics_mode)
-  {
-    if (strcmp(graphics_mode, "nibble-and") == 0)
-      tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
-    else if (strcmp(graphics_mode, "hex-and") == 0)
-      tpcl_job->gmode = TEC_GMODE_HEX_AND;
-    else if (strcmp(graphics_mode, "topix") == 0)
-      tpcl_job->gmode = TEC_GMODE_TOPIX;
-    else if (strcmp(graphics_mode, "nibble-or") == 0)
-      tpcl_job->gmode = TEC_GMODE_NIBBLE_OR;
-    else if (strcmp(graphics_mode, "hex-or") == 0)
-      tpcl_job->gmode = TEC_GMODE_HEX_OR;
-    else
-    {
-      papplLogJob(job, PAPPL_LOGLEVEL_WARN, "Unknown graphics mode '%s', defaulting to TOPIX", graphics_mode);
-      tpcl_job->gmode = TEC_GMODE_TOPIX;
-    }
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Graphics mode set to: %s (%d)", graphics_mode, tpcl_job->gmode);
-  }
+  const char *graphics_mode = tpcl_get_str_option(printer_attrs, "graphics-mode", "topix", job, NULL);
+
+  if (strcmp(graphics_mode, "nibble-and") == 0)
+    tpcl_job->gmode = TEC_GMODE_NIBBLE_AND;
+  else if (strcmp(graphics_mode, "hex-and") == 0)
+    tpcl_job->gmode = TEC_GMODE_HEX_AND;
+  else if (strcmp(graphics_mode, "topix") == 0)
+    tpcl_job->gmode = TEC_GMODE_TOPIX;
+  else if (strcmp(graphics_mode, "nibble-or") == 0)
+    tpcl_job->gmode = TEC_GMODE_NIBBLE_OR;
+  else if (strcmp(graphics_mode, "hex-or") == 0)
+    tpcl_job->gmode = TEC_GMODE_HEX_OR;
   else
   {
-    // Default to TOPIX if not specified
+    papplLogJob(job, PAPPL_LOGLEVEL_WARN, "Unknown graphics mode '%s', defaulting to TOPIX", graphics_mode);
     tpcl_job->gmode = TEC_GMODE_TOPIX;
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Graphics mode not specified, defaulting to TOPIX (%d)", tpcl_job->gmode);
   }
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Graphics mode set to: %s (%d)", graphics_mode, tpcl_job->gmode);
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
@@ -1227,35 +1186,13 @@ tpcl_rstartjob_cb(
   tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print width (0.1mm)
   tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print height (0.1mm)
 
-  // Get label gap from printer settings (0.1mm)
-  int label_gap = 50;  // Default: 5mm
-  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
-  if (gap_attr)
-  {
-    label_gap = ippGetInteger(gap_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_gap);
-  }
-  else
-  {
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
-  }
-
-  // Get roll margin from printer settings (0.1mm)
-  int roll_margin = 10;  // Default: 1mm
-  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
-  if (margin_attr)
-  {
-    roll_margin = ippGetInteger(margin_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_margin);
-  }
-  else
-  {
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
-  }
+  // Get label gap and roll margin from printer settings
+  int label_gap = tpcl_get_int_option(printer_attrs, "label-gap", 50, job, NULL);
+  int roll_margin = tpcl_get_int_option(printer_attrs, "roll-margin", 10, job, NULL);
 
   // Calculate label pitch and roll width from retrieved values
   tpcl_job->label_pitch = tpcl_job->print_height + label_gap;
-  tpcl_job->roll_width  = tpcl_job->print_width + roll_margin;
+  tpcl_job->roll_width = tpcl_job->print_width + roll_margin;
 
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", tpcl_job->print_width, tpcl_job->print_height, tpcl_job->label_pitch, tpcl_job->roll_width);
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / POINTS_PER_INCH), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / POINTS_PER_INCH));
@@ -1299,33 +1236,12 @@ tpcl_rstartjob_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
   // Send feed adjustment command - only send when necessary (when any value != 0)
-  // Get feed adjustment values from printer settings
-  int feed_adjustment = 0;  // Default: no adjustment
-  ipp_attribute_t *feed_adj_attr = ippFindAttribute(printer_attrs, "feed-adjustment-default", IPP_TAG_INTEGER);
-  if (feed_adj_attr)
-  {
-    feed_adjustment = ippGetInteger(feed_adj_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from printer settings: %d (0.1mm)", feed_adjustment);
-  }
-
-  int cut_position_adjustment = 0;  // Default: no adjustment
-  ipp_attribute_t *cut_pos_adj_attr = ippFindAttribute(printer_attrs, "cut-position-adjustment-default", IPP_TAG_INTEGER);
-  if (cut_pos_adj_attr)
-  {
-    cut_position_adjustment = ippGetInteger(cut_pos_adj_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from printer settings: %d (0.1mm)", cut_position_adjustment);
-  }
-
-  int backfeed_adjustment = 0;  // Default: no adjustment
-  ipp_attribute_t *backfeed_adj_attr = ippFindAttribute(printer_attrs, "backfeed-adjustment-default", IPP_TAG_INTEGER);
-  if (backfeed_adj_attr)
-  {
-    backfeed_adjustment = ippGetInteger(backfeed_adj_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from printer settings: %d (0.1mm)", backfeed_adjustment);
-  }
+  // Get feed adjustment values from printer settings using helper function
+  int feed_adjustment, cut_position_adjustment, backfeed_adjustment;
+  bool has_adjustments = tpcl_get_feed_adjustments(printer_attrs, &feed_adjustment, &cut_position_adjustment, &backfeed_adjustment, job, NULL);
 
   // Only send AX command if at least one adjustment value is non-zero
-  if (feed_adjustment != 0 || cut_position_adjustment != 0 || backfeed_adjustment != 0)
+  if (has_adjustments)
   {
     // Format: {AX;+/-bbb,+/-ddd,+/-ff|}
     // Feed: negative = forward (-), positive = backward (+)
@@ -1349,13 +1265,7 @@ tpcl_rstartjob_cb(
 
   // Print density adjustment command - only send when print-darkness is not 0
   // Get print darkness from printer settings (-10 to 10)
-  int print_darkness = 0;  // Default: no adjustment
-  ipp_attribute_t *darkness_attr = ippFindAttribute(printer_attrs, "print-darkness-default", IPP_TAG_INTEGER);
-  if (darkness_attr)
-  {
-    print_darkness = ippGetInteger(darkness_attr, 0);
-    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from printer settings: %d", print_darkness);
-  }
+  int print_darkness = tpcl_get_int_option(printer_attrs, "print-darkness", 0, job, NULL);
 
   // Only send AY command if darkness adjustment is non-zero
   if (print_darkness != 0)
@@ -1901,18 +1811,13 @@ tpcl_rendpage_cb(
   }
 
   // bbb: Cut interval (000 to 100, 000 = no cut)
-  int cut_interval = 0;
-  ipp_attribute_t *cut_interval_attr = ippFindAttribute(printer_attrs, "cut-interval-default", IPP_TAG_INTEGER);
-  if (cut_interval_attr)
+  int cut_interval = tpcl_get_int_option(printer_attrs, "cut-interval", 0, job, NULL);
+  if (cut_interval < 0 || cut_interval > 100)
   {
-    cut_interval = ippGetInteger(cut_interval_attr, 0);
-    if (cut_interval < 0 || cut_interval > 100)
-    {
-      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Invalid cut interval %d, must be in range [0-100]", cut_interval);
-      ippDelete(printer_attrs);
-      tpcl_free_job_buffers(job, tpcl_job);
-      return false;
-    }
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Invalid cut interval %d, must be in range [0-100]", cut_interval);
+    ippDelete(printer_attrs);
+    tpcl_free_job_buffers(job, tpcl_job);
+    return false;
   }
 
   // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
@@ -2080,33 +1985,8 @@ const char* tpcl_testpage_cb(
     return NULL;
   }
 
-  // Get label gap from printer settings (0.1mm)
-  ipp_attribute_t *gap_attr = ippFindAttribute(printer_attrs, "label-gap-default", IPP_TAG_INTEGER);
-  if (gap_attr)
-  {
-    label_pitch = print_height + ippGetInteger(gap_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved label gap from printer settings: %d (0.1mm)", label_pitch - print_height);
-  }
-  else
-  {
-    label_pitch = print_height + 50;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default label gap of 5mm");
-  }
-
-  // Get roll margin from printer settings (0.1mm)
-  ipp_attribute_t *margin_attr = ippFindAttribute(printer_attrs, "roll-margin-default", IPP_TAG_INTEGER);
-  if (margin_attr)
-  {
-    roll_width = print_width + ippGetInteger(margin_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved roll margin from printer settings: %d (0.1mm)", roll_width - print_width);
-  }
-  else
-  {
-    roll_width  = print_width + 10;
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default roll margin of 1mm");
-  }
-
-  papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)", print_width, print_height, label_pitch, roll_width);
+  // Get label dimensions using helper function
+  tpcl_get_label_dimensions(printer_attrs, print_width, print_height, &label_pitch, &roll_width, NULL, printer);
 
   // Send label size command
   snprintf(
@@ -2122,32 +2002,11 @@ const char* tpcl_testpage_cb(
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Sending label size command: %s", command);
 
   // 2. AX command - Feed adjustment (only if values are non-zero)
-  int feed_adjustment = 0;
-  ipp_attribute_t *feed_adj_attr = ippFindAttribute(printer_attrs, "feed-adjustment-default", IPP_TAG_INTEGER);
-  if (feed_adj_attr)
-  {
-    feed_adjustment = ippGetInteger(feed_adj_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved feed adjustment from printer settings: %d (0.1mm)", feed_adjustment);
-  }
-
-  int cut_position_adjustment = 0;
-  ipp_attribute_t *cut_pos_adj_attr = ippFindAttribute(printer_attrs, "cut-position-adjustment-default", IPP_TAG_INTEGER);
-  if (cut_pos_adj_attr)
-  {
-    cut_position_adjustment = ippGetInteger(cut_pos_adj_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved cut position adjustment from printer settings: %d (0.1mm)", cut_position_adjustment);
-  }
-
-  int backfeed_adjustment = 0;
-  ipp_attribute_t *backfeed_adj_attr = ippFindAttribute(printer_attrs, "backfeed-adjustment-default", IPP_TAG_INTEGER);
-  if (backfeed_adj_attr)
-  {
-    backfeed_adjustment = ippGetInteger(backfeed_adj_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved backfeed adjustment from printer settings: %d (0.1mm)", backfeed_adjustment);
-  }
+  int feed_adjustment, cut_position_adjustment, backfeed_adjustment;
+  bool has_adjustments = tpcl_get_feed_adjustments(printer_attrs, &feed_adjustment, &cut_position_adjustment, &backfeed_adjustment, NULL, printer);
 
   // Only send AX command if at least one adjustment value is non-zero
-  if (feed_adjustment != 0 || cut_position_adjustment != 0 || backfeed_adjustment != 0)
+  if (has_adjustments)
   {
     snprintf(
       command,
@@ -2166,13 +2025,7 @@ const char* tpcl_testpage_cb(
   }
 
   // 3. AY command - Print density (only if darkness is non-zero)
-  int print_darkness = 0;
-  ipp_attribute_t *darkness_attr = ippFindAttribute(printer_attrs, "print-darkness-default", IPP_TAG_INTEGER);
-  if (darkness_attr)
-  {
-    print_darkness = ippGetInteger(darkness_attr, 0);
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved print darkness from printer settings: %d", print_darkness);
-  }
+  int print_darkness = tpcl_get_int_option(printer_attrs, "print-darkness", 0, NULL, printer);
 
   // Only send AY command if darkness adjustment is non-zero
   if (print_darkness != 0)
@@ -2369,12 +2222,7 @@ const char* tpcl_testpage_cb(
   int num_copies = 1;
 
   // bbb: Cut interval (000 to 100, 000 = no cut)
-  int cut_interval = 0;
-  ipp_attribute_t *cut_interval_attr = ippFindAttribute(printer_attrs, "cut-interval-default", IPP_TAG_INTEGER);
-  if (cut_interval_attr)
-  {
-    cut_interval = ippGetInteger(cut_interval_attr, 0);
-  }
+  int cut_interval = tpcl_get_int_option(printer_attrs, "cut-interval", 0, NULL, printer);
 
   // c: Type of sensor (0=none, 1=reflective, 2=transmissive, 3=transmissive pre-print, 4=reflective pre-print)
   char sensor_char = '2';
@@ -2752,4 +2600,226 @@ tpcl_save_printer_state(
     filepath, state->last_print_width, state->last_print_height, state->last_label_gap, state->last_roll_margin);
 
   return true;
+}
+
+
+/*
+ * 'tpcl_get_int_option()' - Get integer option from IPP attributes
+ *
+ * Retrieves an integer option value from printer IPP attributes.
+ * Logs the retrieved value using appropriate logger (job or printer).
+ * Returns the default value if attribute is not found.
+ */
+
+static int
+tpcl_get_int_option(
+  ipp_t                    *attrs,
+  const char               *name,
+  int                      default_val,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+)
+{
+  char attr_name[256];
+  int value = default_val;
+
+  snprintf(attr_name, sizeof(attr_name), "%s-default", name);
+  ipp_attribute_t *attr = ippFindAttribute(attrs, attr_name, IPP_TAG_INTEGER);
+
+  if (attr)
+  {
+    value = ippGetInteger(attr, 0);
+    if (job)
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved %s from printer settings: %d", name, value);
+    else if (printer)
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved %s from printer settings: %d", name, value);
+  }
+  else
+  {
+    if (job)
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default %s: %d", name, default_val);
+    else if (printer)
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default %s: %d", name, default_val);
+  }
+
+  return value;
+}
+
+
+/*
+ * 'tpcl_get_str_option()' - Get string option from IPP attributes
+ *
+ * Retrieves a string option value from printer IPP attributes.
+ * Logs the retrieved value using appropriate logger (job or printer).
+ * Returns the default value if attribute is not found.
+ */
+
+static const char*
+tpcl_get_str_option(
+  ipp_t                    *attrs,
+  const char               *name,
+  const char               *default_val,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+)
+{
+  char attr_name[256];
+  const char *value = default_val;
+
+  snprintf(attr_name, sizeof(attr_name), "%s-default", name);
+  ipp_attribute_t *attr = ippFindAttribute(attrs, attr_name, IPP_TAG_KEYWORD);
+
+  if (attr)
+  {
+    value = ippGetString(attr, 0, NULL);
+    if (job)
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Retrieved %s from printer settings: %s", name, value);
+    else if (printer)
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Retrieved %s from printer settings: %s", name, value);
+  }
+  else
+  {
+    if (job)
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Using default %s: %s", name, default_val);
+    else if (printer)
+      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Using default %s: %s", name, default_val);
+  }
+
+  return value;
+}
+
+
+/*
+ * 'tpcl_add_vendor_int_option()' - Add integer vendor option
+ *
+ * Registers an integer vendor option with IPP attributes for range and default value.
+ */
+
+static void
+tpcl_add_vendor_int_option(
+  pappl_pr_driver_data_t   *driver_data,
+  ipp_t                    **driver_attrs,
+  const char               *name,
+  int                      min,
+  int                      max,
+  int                      default_val
+)
+{
+  char supported_name[256];
+  char default_name[256];
+
+  driver_data->vendor[driver_data->num_vendor] = name;
+
+  snprintf(supported_name, sizeof(supported_name), "%s-supported", name);
+  snprintf(default_name, sizeof(default_name), "%s-default", name);
+
+  ippAddRange(*driver_attrs, IPP_TAG_PRINTER, supported_name, min, max);
+  ippAddInteger(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_INTEGER, default_name, default_val);
+
+  driver_data->num_vendor++;
+}
+
+
+/*
+ * 'tpcl_add_vendor_str_option()' - Add string vendor option
+ *
+ * Registers a string vendor option with IPP attributes for supported values and default.
+ */
+
+static void
+tpcl_add_vendor_str_option(
+  pappl_pr_driver_data_t   *driver_data,
+  ipp_t                    **driver_attrs,
+  const char               *name,
+  int                      num_values,
+  const char               **values,
+  const char               *default_val
+)
+{
+  char supported_name[256];
+  char default_name[256];
+
+  driver_data->vendor[driver_data->num_vendor] = name;
+
+  snprintf(supported_name, sizeof(supported_name), "%s-supported", name);
+  snprintf(default_name, sizeof(default_name), "%s-default", name);
+
+  ippAddStrings(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, supported_name, num_values, NULL, values);
+  ippAddString(*driver_attrs, IPP_TAG_PRINTER, IPP_TAG_KEYWORD, default_name, NULL, default_val);
+
+  driver_data->num_vendor++;
+}
+
+
+/*
+ * 'tpcl_get_label_dimensions()' - Calculate label dimensions from printer settings
+ *
+ * Retrieves label gap and roll margin from printer settings and calculates
+ * label pitch and roll width based on the print dimensions.
+ * Returns true on success, false on failure.
+ */
+
+static bool
+tpcl_get_label_dimensions(
+  ipp_t                    *printer_attrs,
+  int                      print_width,
+  int                      print_height,
+  int                      *label_pitch,
+  int                      *roll_width,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+)
+{
+  int label_gap = 50;  // Default: 5mm
+  int roll_margin = 10;  // Default: 1mm
+
+  // Get label gap from printer settings (0.1mm)
+  label_gap = tpcl_get_int_option(printer_attrs, "label-gap", 50, job, printer);
+
+  // Get roll margin from printer settings (0.1mm)
+  roll_margin = tpcl_get_int_option(printer_attrs, "roll-margin", 10, job, printer);
+
+  // Calculate label pitch and roll width from retrieved values
+  *label_pitch = print_height + label_gap;
+  *roll_width = print_width + roll_margin;
+
+  if (job)
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions from page size: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)",
+                print_width, print_height, *label_pitch, *roll_width);
+  else if (printer)
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Calculated label dimensions: width=%d (0.1mm), height=%d (0.1mm), pitch=%d (0.1mm), roll=%d (0.1mm)",
+                    print_width, print_height, *label_pitch, *roll_width);
+
+  return true;
+}
+
+
+/*
+ * 'tpcl_get_feed_adjustments()' - Get feed adjustment values from printer settings
+ *
+ * Retrieves feed adjustment, cut position adjustment, and backfeed adjustment values
+ * from printer settings. Returns true if at least one adjustment is non-zero, false otherwise.
+ */
+
+static bool
+tpcl_get_feed_adjustments(
+  ipp_t                    *printer_attrs,
+  int                      *feed_adjustment,
+  int                      *cut_position_adjustment,
+  int                      *backfeed_adjustment,
+  pappl_job_t              *job,
+  pappl_printer_t          *printer
+)
+{
+  // Get feed adjustment from printer settings (0.1mm)
+  *feed_adjustment = tpcl_get_int_option(printer_attrs, "feed-adjustment", 0, job, printer);
+
+  // Get cut position adjustment from printer settings (0.1mm)
+  *cut_position_adjustment = tpcl_get_int_option(printer_attrs, "cut-position-adjustment", 0, job, printer);
+
+  // Get backfeed adjustment from printer settings (0.1mm)
+  *backfeed_adjustment = tpcl_get_int_option(printer_attrs, "backfeed-adjustment", 0, job, printer);
+
+  // Return true if at least one adjustment is non-zero
+  return (*feed_adjustment != 0 || *cut_position_adjustment != 0 || *backfeed_adjustment != 0);
 }

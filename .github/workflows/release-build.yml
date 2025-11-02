@@ -48,6 +48,8 @@ jobs:
           echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix openssl)/lib/pkgconfig:$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix libusb)/lib/pkgconfig" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$(brew --prefix zlib)/include" >> $GITHUB_ENV
           echo "LDFLAGS=-L$(brew --prefix zlib)/lib" >> $GITHUB_ENV
+          # Ensure we build for native architecture (arm64 on Apple Silicon)
+          echo "ARCHFLAGS=-arch $(uname -m)" >> $GITHUB_ENV
 
       # --- Build ------------------------------------------------------------
       - name: Show tool versions

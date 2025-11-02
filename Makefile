@@ -28,7 +28,12 @@ full:
 	@./scripts/generate-icon-headers.sh
 	@echo "Rebuilding PAPPL from scratch, keeping config..."
 	@$(MAKE) -C $(PAPPL_DIR) clean
-	@$(MAKE) -C $(PAPPL_DIR)
+	@if [ -n "$$ARCHFLAGS" ]; then \
+		echo "Building PAPPL with ARCHFLAGS=$$ARCHFLAGS"; \
+		$(MAKE) -C $(PAPPL_DIR) ARCHFLAGS="$$ARCHFLAGS"; \
+	else \
+		$(MAKE) -C $(PAPPL_DIR); \
+	fi
 	@mkdir -p $(BINDIR)
 	@$(MAKE) -C $(SRCDIR) all
 
@@ -38,11 +43,15 @@ pappl-init:
 		echo "Initializing PAPPL submodule..."; \
 		git submodule update --init --recursive; \
 	fi
-	@if [ ! -f "$(PAPPL_DIR)/pappl/libpappl.so" ]; then \
-		@echo "Patching PAPPL translations with custom strings..."; \
-		@./scripts/patch-translations.sh; \
+	@if [ ! -f "$(PAPPL_DIR)/pappl/libpappl.so" ] && [ ! -f "$(PAPPL_DIR)/pappl/libpappl.dylib" ]; then \
+		echo "Patching PAPPL translations with custom strings..."; \
+		./scripts/patch-translations.sh; \
 		echo "Configuring and building PAPPL for the first time..."; \
-		cd $(PAPPL_DIR) && ./configure && $(MAKE); \
+		if [ -n "$$ARCHFLAGS" ]; then \
+			cd $(PAPPL_DIR) && ./configure && $(MAKE) ARCHFLAGS="$$ARCHFLAGS"; \
+		else \
+			cd $(PAPPL_DIR) && ./configure && $(MAKE); \
+		fi \
 	fi
 
 # Clean build artifacts

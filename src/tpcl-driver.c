@@ -1249,6 +1249,14 @@ tpcl_rendpage_cb(
   // Send the XS command
   tpcl_cmd_issue_label(device, num_copies, cut_interval, sensor_char, feed_mode_char, speed_char, ribbon_char, rotation_char, status_response_char, job, NULL);
 
+  // Workaround: Send padding to avoid TCP zero-window error on network connections
+  const char *device_uri = papplPrinterGetDeviceURI(printer);
+  if (device_uri && strncmp(device_uri, "socket://", 9) == 0)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Sending 1024 space padding (TCP workaround for network connection)");
+    papplDevicePrintf(device, "%1024s", "");
+  }
+
   ippDelete(printer_attrs);
   papplDeviceFlush(device);
   return true;

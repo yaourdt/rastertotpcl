@@ -19,8 +19,6 @@ jobs:
         include:
           - os: ubuntu-latest
             os_name: linux
-          - os: macos-latest
-            os_name: macos
 
     steps:
       - name: Checkout (with submodules)
@@ -38,18 +36,6 @@ jobs:
             libcups2-dev libjpeg-dev libpng-dev zlib1g-dev \
             libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
             imagemagick
-
-      - name: Install macOS dependencies (Homebrew)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew update
-          brew install cups libjpeg libpng zlib openssl libusb imagemagick
-          # Help pkg-config find keg-only formulae like openssl/zlib if needed
-          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix openssl)/lib/pkgconfig:$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix libusb)/lib/pkgconfig" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$(brew --prefix zlib)/include" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$(brew --prefix zlib)/lib" >> $GITHUB_ENV
-          # Ensure we build for native architecture (arm64 on Apple Silicon)
-          echo "ARCHFLAGS=-arch $(uname -m)" >> $GITHUB_ENV
 
       # --- Build ------------------------------------------------------------
       - name: Show tool versions

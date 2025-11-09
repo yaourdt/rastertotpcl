@@ -48,6 +48,8 @@ The user will issue test jobs.
 
 ## Installation
 
+### Manual Installation
+
 Install requires root privileges:
 ```bash
 sudo make install
@@ -61,6 +63,16 @@ sudo make uninstall
 ```
 
 **Note:** Data directories are NOT created during installation. PAPPL creates them automatically at runtime.
+
+### RPM Package
+
+An RPM package definition is available in `tpcl-printer-app.spec`. The package includes a systemd service for automatic startup at boot.
+
+**Key differences from manual installation:**
+- Binary installs to `/usr/bin/tpcl-printer-app` (not `/usr/local/bin/`)
+- Includes systemd service at `/usr/lib/systemd/system/tpcl-printer-app.service`
+- Service must be manually enabled: `sudo systemctl enable tpcl-printer-app`
+- Configuration in `/var/lib/` and `/var/spool/` is preserved on uninstallation
 
 ## Runtime File Locations
 

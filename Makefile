@@ -10,7 +10,9 @@ PAPPL_DIR = external/pappl
 
 # Default target: build the application
 all:
+ifndef package-build
 	@$(MAKE) pappl-init
+endif
 	@if [ ! -f "$(SRCDIR)/icon-48.h" ] || [ ! -f "$(SRCDIR)/icon-128.h" ] || [ ! -f "$(SRCDIR)/icon-512.h" ]; then \
 		echo "Generating missing icon headers..."; \
 		./scripts/generate-icon-headers.sh; \
@@ -18,7 +20,11 @@ all:
 	@echo "Generating version header..."
 	@./scripts/generate-version.sh
 	@mkdir -p $(BINDIR)
+ifdef package-build
+	@$(MAKE) -C $(SRCDIR) all package-build=1
+else
 	@$(MAKE) -C $(SRCDIR) all
+endif
 
 # Full build: clean and rebuild everything including PAPPL
 full:

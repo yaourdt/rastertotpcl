@@ -1,0 +1,37 @@
+[Unit]
+Description=TPCL Printer Application
+Documentation=https://github.com/yaourdt/rastertotpcl
+After=network-online.target avahi-daemon.service cups.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/tpcl-printer-app server -o log-level=info
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Writable paths for state, spool, config, cache, and logs
+ReadWritePaths=/var/lib /var/spool /var/cache /var/log /etc
+# Note: /usr/local/etc is conditionally added if it exists in the postinstall script
+
+# Allow device access for printers
+# USB printers
+DeviceAllow=/dev/usb/lp* rw
+DeviceAllow=/dev/bus/usb/* rw
+# Parallel port printers
+DeviceAllow=/dev/lp* rw
+DeviceAllow=/dev/parport* rw
+# Serial port printers
+DeviceAllow=/dev/ttyS* rw
+DeviceAllow=/dev/ttyUSB* rw
+DeviceAllow=/dev/ttyACM* rw
+# Character devices
+DeviceAllow=char-usb_device rwm
+DeviceAllow=char-lp rwm
+
+[Install]
+WantedBy=multi-user.target

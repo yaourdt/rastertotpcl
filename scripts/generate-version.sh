@@ -24,7 +24,7 @@ else
 
     # Check for uncommitted changes
     if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        VERSION="${VERSION}-dirty"
+        VERSION="${VERSION}.dirty"
     fi
 fi
 

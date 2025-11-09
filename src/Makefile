@@ -11,8 +11,16 @@ BINDIR_INSTALL = $(PREFIX)/bin
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -O2 -g -I$(PAPPL_DIR) -I$(PAPPL_DIR)/pappl
+ifdef package-build
+# For package builds: statically link PAPPL
+LDFLAGS =
+PAPPL_LIB = $(PAPPL_DIR)/pappl/libpappl.a
+else
+# For development builds: use rpath for local PAPPL
 LDFLAGS = -L$(PAPPL_DIR)/pappl -Wl,-rpath,$(shell cd .. && pwd)/external/pappl/pappl
-LIBS = -lpappl -lcups -lpthread -lm
+PAPPL_LIB = -lpappl
+endif
+LIBS = $(PAPPL_LIB) -lcups -lpthread -lm
 
 # Get additional flags from PAPPL's build
 PAPPL_LIBS = -lavahi-common -lavahi-client -lssl -lcrypto -ljpeg -lpng16 -lusb-1.0 -lpam -lz

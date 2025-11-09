@@ -184,6 +184,33 @@ make help
 - Translations are patched directly into PAPPL during the build process. See `/scripts` for details.
 - ImageMagick is used to convert icon images to C header files during the build.
 
+## Installation
+
+### Manual Installation (from source)
+
+After building, install with:
+
+```bash
+sudo make install
+```
+
+To uninstall:
+
+```bash
+sudo make uninstall
+```
+
+### RPM Package
+
+An RPM package is available for RPM-based Linux distributions. The RPM package includes a systemd service for automatic startup at boot. The service is **not enabled by default** - enable it with:
+
+```bash
+sudo systemctl enable tpcl-printer-app
+sudo systemctl start tpcl-printer-app
+```
+
+Once the service is running, access the web interface at `http://localhost:8000` (or `http://<hostname>:8000` for remote access).
+
 ## Technical Details
 
 This is an IPP (Internet Printing Protocol) Printer Application built on the [PAPPL framework](https://github.com/michaelrsweet/pappl/). PAPPL is a modern printer application framework that replaces the older PPD-based system used by CUPS.
@@ -206,6 +233,10 @@ sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 
 ### Configuration Files
 
+**Binary location:**
+* Manual install: `/usr/local/bin/tpcl-printer-app`
+* RPM package: `/usr/bin/tpcl-printer-app`
+
 **System state file** (`tpcl-printer-app.state` - stores system and printer configuration):
 * Root (Linux/BSD): `/var/lib/tpcl-printer-app.state`
 * User (Linux/BSD): `$XDG_CONFIG_HOME/tpcl-printer-app.state` (if set) or `$HOME/.config/tpcl-printer-app.state`
@@ -227,8 +258,11 @@ sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 * System (macOS): `/Library/Application Support/tpcl-printer-app.conf`
 * Snap: `$SNAP_COMMON/tpcl-printer-app.conf`
 
+**Systemd service file** (RPM package only):
+* `/usr/lib/systemd/system/tpcl-printer-app.service`
+
 **Logs:**
-* Default: system logging provider
+* Default: system logging provider (viewable with `journalctl -u tpcl-printer-app` when using systemd)
 * Debug mode: `/tmp/pappl<pid>.log`
 * Nibble mode dump (debug only): `/tmp/rastertotpcl-nibble-dump-<pid>.out`
 

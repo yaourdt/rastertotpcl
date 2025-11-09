@@ -2,33 +2,32 @@ Name:           tpcl-printer-app
 Version:        0.2.3
 Release:        1%{?dist}
 Summary:        Printer driver for Toshiba TEC TPCL label printers
+%global pappl_version 1.4.9
 
 License:        GPL-3.0-or-later
 URL:            https://github.com/yaourdt/rastertotpcl
 Source0:        %{name}-%{version}.tar.gz
+Source1:        https://github.com/michaelrsweet/pappl/releases/download/v%{pappl_version}/pappl-%{pappl_version}.tar.gz#/pappl-%{pappl_version}.tar.gz
+Source2:        tpcl-printer-app.service
 
 BuildRequires:  gcc
+BuildRequires:  systemd-rpm-macros
 BuildRequires:  make
-BuildRequires:  git
 BuildRequires:  ImageMagick
 BuildRequires:  pkgconfig
 BuildRequires:  cups-devel
-BuildRequires:  libjpeg-turbo-devel
+BuildRequires:  libjpeg8-devel
 BuildRequires:  libpng-devel
 BuildRequires:  zlib-devel
 BuildRequires:  openssl-devel
-BuildRequires:  libusb1-devel
+BuildRequires:  libusb-1_0-devel
 BuildRequires:  pam-devel
 BuildRequires:  avahi-devel
 
-Requires:       cups-libs
-Requires:       libjpeg-turbo
-Requires:       libpng16
-Requires:       zlib
-Requires:       openssl-libs
-Requires:       libusb1
-Requires:       pam
-Requires:       avahi-libs
+# Runtime dependencies are auto-detected from linked libraries
+Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
 
 %description
 This is a modern printer application for Toshiba TEC label printers
@@ -39,19 +38,48 @@ interface for configuring printer settings, replacing the older
 PPD-based driver system.
 
 %prep
-%setup -q
+%autosetup -n %{name}-%{version} -a 1
+
+# Unpack PAPPL release tarball and place into source tree
+rm -rf external/pappl
+mkdir -p external
+mv pappl-%{pappl_version} external/pappl
 
 %build
-make full
+export GIT_COMMIT=%{version}
+# Build PAPPL first
+pushd external/pappl
+./configure --prefix=%{_prefix}
+popd
+./scripts/patch-translations.sh
+pushd external/pappl
+%make_build
+popd
+# Build tpcl-printer-app with package-build flag
+%make_build package-build=1
 
 %install
-rm -rf $RPM_BUILD_ROOT
-make install DESTDIR=$RPM_BUILD_ROOT PREFIX=/usr
+install -Dm0755 bin/tpcl-printer-app \
+  %{buildroot}%{_bindir}/tpcl-printer-app
+install -Dm0644 %{SOURCE2} \
+  %{buildroot}%{_unitdir}/tpcl-printer-app.service
+
+%post
+%systemd_post tpcl-printer-app.service
+
+%preun
+%systemd_preun tpcl-printer-app.service
+
+%postun
+%systemd_postun_with_restart tpcl-printer-app.service
 
 %files
-/usr/bin/tpcl-printer-app
+%license LICENSE
+%doc README.md
+%{_bindir}/tpcl-printer-app
+%{_unitdir}/tpcl-printer-app.service
 
 %changelog
-* Sat Nov 09 2025 Mark Dornbach <mark@dornbach.io>
+* Sun Nov 09 2025 Mark Dornbach <mark@dornbach.io>
 - Inital RPM package
 - For full changelog, see https://github.com/yaourdt/rastertotpcl

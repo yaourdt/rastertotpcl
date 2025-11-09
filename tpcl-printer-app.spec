@@ -1,5 +1,5 @@
 Name:           tpcl-printer-app
-Version:        0.2.3
+Version:        @@VERSION@@
 Release:        1%{?dist}
 Summary:        Printer driver for Toshiba TEC TPCL label printers
 %global pappl_version 1.4.9

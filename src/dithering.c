@@ -1,5 +1,5 @@
 /*
- * Helper file for creating dithering matrices. 
+ * Helper file for creating dithering matrices.
  *
  * Bayer, clustered and threshold algorithms are available.
  *
@@ -8,7 +8,6 @@
  * Licensed under GNU GPL v3.
  */
 
-#include <pappl/pappl.h>
 #include "dithering.h"
 
 

@@ -17,6 +17,13 @@
 #include "tpcl-commands.h"
 #include "tpcl-ipp-utils.h"
 #include "tpcl-config.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 /*
  * Job data structure

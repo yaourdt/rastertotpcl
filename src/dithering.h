@@ -1,5 +1,5 @@
 /*
- * Dithering header. 
+ * Dithering header.
  *
  * Bayer, clustered and threshold algorithms are available.
  *
@@ -10,6 +10,8 @@
 
 #ifndef TPCL_DITHER_H
 #define TPCL_DITHER_H
+
+#include <pappl/pappl.h>
 
 void dither_bayer16(pappl_dither_t dither);
 

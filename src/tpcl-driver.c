@@ -710,8 +710,9 @@ tpcl_rstartjob_cb(
 
   // Calculate label dimensions from page size
   // cupsPageSize is in points (1/72 inch), convert to 0.1mm: points * 25.4 * 10 / 72
-  tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print width (0.1mm)
-  tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * MM_PER_INCH * 10.0 / POINTS_PER_INCH);  // Effective print height (0.1mm)
+  // Add 0.5 before truncating to properly round instead of truncating (avoids rounding errors)
+  tpcl_job->print_width  = (int)(options->header.cupsPageSize[0] * MM_PER_INCH * 10.0 / POINTS_PER_INCH + 0.5);  // Effective print width (0.1mm)
+  tpcl_job->print_height = (int)(options->header.cupsPageSize[1] * MM_PER_INCH * 10.0 / POINTS_PER_INCH + 0.5);  // Effective print height (0.1mm)
 
   // Get label gap and roll margin from printer settings
   int label_gap = tpcl_get_int_option(printer_attrs, "label-gap", 50, job, NULL);

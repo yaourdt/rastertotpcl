@@ -10,20 +10,19 @@
  */
 
 #include "tpcl-state.h"
-#include <sys/stat.h>
-#include <errno.h>
+#include <unistd.h>
 #include <string.h>
 
 
-/*
- * Platform-specific state file directory
- */
+/* State files are managed by PAPPL (platform-specific paths) */
+#define STATE_PATH_MAX 512
 
-#ifdef __APPLE__
-  #define TPCL_STATE_DIR "/Library/Application Support/tpcl-printer-app"
-#else
-  #define TPCL_STATE_DIR "/usr/local/etc/tpcl-printer-app"
-#endif
+
+/* State file field names */
+#define STATE_FIELD_WIDTH  "last_print_width"
+#define STATE_FIELD_HEIGHT "last_print_height"
+#define STATE_FIELD_GAP    "last_label_gap"
+#define STATE_FIELD_MARGIN "last_roll_margin"
 
 
 /*
@@ -35,7 +34,6 @@ typedef struct {
   int  last_print_height;
   int  last_label_gap;
   int  last_roll_margin;
-  bool initialized;
 } tpcl_printer_state_t;
 
 
@@ -43,8 +41,7 @@ typedef struct {
  * Private helper functions
  */
 
-static bool get_state_file_path(pappl_printer_t *printer, char *filepath, size_t filepath_size);
-static bool ensure_state_directory(void);
+static int  open_state_file(pappl_printer_t *printer, const char *mode, char *filepath, size_t filepath_size);
 static bool load_state_from_file(pappl_printer_t *printer, tpcl_printer_state_t *state);
 static bool save_state_to_file(pappl_printer_t *printer, const tpcl_printer_state_t *state);
 static bool state_has_changed(const tpcl_printer_state_t *state, int w, int h, int g, int m);
@@ -98,7 +95,6 @@ tpcl_state_check_and_update(
     state.last_print_height = print_height;
     state.last_label_gap = label_gap;
     state.last_roll_margin = roll_margin;
-    state.initialized = true;
 
     save_state_to_file(printer, &state);
   }
@@ -116,68 +112,44 @@ tpcl_state_delete(
   pappl_printer_t *printer
 )
 {
-  char filepath[512];
+  char filepath[STATE_PATH_MAX];
+  int fd;
 
-  if (get_state_file_path(printer, filepath, sizeof(filepath)))
-  {
-    if (unlink(filepath) == 0)
-    {
-      papplLogPrinter(printer, PAPPL_LOGLEVEL_INFO, "Deleted state file: %s", filepath);
-    }
-    else if (errno == ENOENT)
-    {
-      papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No state file to delete at %s", filepath);
-    }
-    else
-    {
-      papplLogPrinter(printer, PAPPL_LOGLEVEL_WARN, "Failed to delete state file %s: %s", filepath, strerror(errno));
-    }
-  }
+  fd = open_state_file(printer, "x", filepath, sizeof(filepath));
+
+  if (fd >= 0)
+    close(fd);
+
+  papplLogPrinter(printer, fd >= 0 ? PAPPL_LOGLEVEL_INFO : PAPPL_LOGLEVEL_DEBUG,
+                  fd >= 0 ? "Deleted state file: %s" : "No state file to delete",
+                  filepath);
 }
 
 
 /*
- * Private helper implementations
+ * 'open_state_file()' - Open state file using PAPPL's file management
  */
 
-
-/*
- * 'get_state_file_path()' - Construct state file path for printer
- */
-
-static bool
-get_state_file_path(
+static int
+open_state_file(
   pappl_printer_t *printer,
+  const char      *mode,
   char            *filepath,
   size_t          filepath_size
 )
 {
-  const char *printer_name = papplPrinterGetName(printer);
+  char path[STATE_PATH_MAX];
+  int fd;
 
-  if (!printer_name)
-  {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Cannot get printer name for state file");
-    return false;
-  }
+  fd = papplPrinterOpenFile(printer, path, sizeof(path), NULL, "labelstate", "state", mode);
 
-  snprintf(filepath, filepath_size, "%s/%s.state", TPCL_STATE_DIR, printer_name);
-  return true;
+  if (filepath && filepath_size > 0)
+    snprintf(filepath, filepath_size, "%s", path);
+
+  return fd;
 }
 
 
-/*
- * 'ensure_state_directory()' - Create state directory if it doesn't exist
- */
-
-static bool
-ensure_state_directory(void)
-{
-  if (mkdir(TPCL_STATE_DIR, 0755) != 0 && errno != EEXIST)
-  {
-    return false;
-  }
-  return true;
-}
 
 
 /*
@@ -190,20 +162,26 @@ load_state_from_file(
   tpcl_printer_state_t *state
 )
 {
-  char filepath[512];
+  char filepath[STATE_PATH_MAX];
+  int  fd;
   FILE *fp;
-  char line[512];
+  char line[STATE_PATH_MAX];
   int loaded_width = -1, loaded_height = -1, loaded_gap = -1, loaded_margin = -1;
 
-  // Get file path
-  if (!get_state_file_path(printer, filepath, sizeof(filepath)))
+  // Open state file using PAPPL
+  fd = open_state_file(printer, "r", filepath, sizeof(filepath));
+  if (fd < 0)
+  {
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No previous state file found");
     return false;
+  }
 
-  // Try to open the state file
-  fp = fopen(filepath, "r");
+  // Convert file descriptor to FILE* for easier parsing
+  fp = fdopen(fd, "r");
   if (!fp)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "No previous state file found at %s", filepath);
+    close(fd);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to fdopen state file");
     return false;
   }
 
@@ -213,22 +191,22 @@ load_state_from_file(
     // Remove trailing newline
     line[strcspn(line, "\n")] = '\0';
 
-    if (sscanf(line, "last_print_width=%d", &loaded_width) == 1)
+    if (sscanf(line, STATE_FIELD_WIDTH "=%d", &loaded_width) == 1)
       continue;
-    if (sscanf(line, "last_print_height=%d", &loaded_height) == 1)
+    if (sscanf(line, STATE_FIELD_HEIGHT "=%d", &loaded_height) == 1)
       continue;
-    if (sscanf(line, "last_label_gap=%d", &loaded_gap) == 1)
+    if (sscanf(line, STATE_FIELD_GAP "=%d", &loaded_gap) == 1)
       continue;
-    if (sscanf(line, "last_roll_margin=%d", &loaded_margin) == 1)
+    if (sscanf(line, STATE_FIELD_MARGIN "=%d", &loaded_margin) == 1)
       continue;
   }
 
-  fclose(fp);
+  fclose(fp);  // This also closes fd
 
   // Validate that we loaded all required fields
   if (loaded_width < 0 || loaded_height < 0 || loaded_gap < 0 || loaded_margin < 0)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_WARN, "Incomplete state file at %s, ignoring", filepath);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_WARN, "Failed to load complete state file, ignoring");
     return false;
   }
 
@@ -237,7 +215,6 @@ load_state_from_file(
   state->last_print_height = loaded_height;
   state->last_label_gap = loaded_gap;
   state->last_roll_margin = loaded_margin;
-  state->initialized = true;
 
   papplLogPrinter(printer, PAPPL_LOGLEVEL_DEBUG, "Loaded state from %s: width=%d, height=%d, gap=%d, margin=%d", filepath, loaded_width, loaded_height, loaded_gap, loaded_margin);
 
@@ -255,35 +232,39 @@ save_state_to_file(
   const tpcl_printer_state_t *state
 )
 {
-  char filepath[512];
+  char filepath[STATE_PATH_MAX];
+  int  fd;
   FILE *fp;
 
-  // Create directory if it doesn't exist
-  if (!ensure_state_directory())
+  // Open file for writing using PAPPL (creates directories automatically)
+  fd = open_state_file(printer, "w", filepath, sizeof(filepath));
+  if (fd < 0)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to create directory %s: %s", TPCL_STATE_DIR, strerror(errno));
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open state file for writing");
     return false;
   }
 
-  // Get file path
-  if (!get_state_file_path(printer, filepath, sizeof(filepath)))
-    return false;
-
-  // Open file for writing
-  fp = fopen(filepath, "w");
+  // Convert file descriptor to FILE* for easier writing
+  fp = fdopen(fd, "w");
   if (!fp)
   {
-    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to open state file %s for writing: %s", filepath, strerror(errno));
+    close(fd);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to fdopen state file");
     return false;
   }
 
   // Write state to file
-  fprintf(fp, "# TPCL Printer State File\n");
-  fprintf(fp, "# Auto-generated - do not edit manually\n");
-  fprintf(fp, "last_print_width=%d\n", state->last_print_width);
-  fprintf(fp, "last_print_height=%d\n", state->last_print_height);
-  fprintf(fp, "last_label_gap=%d\n", state->last_label_gap);
-  fprintf(fp, "last_roll_margin=%d\n", state->last_roll_margin);
+  if (fprintf(fp, "# TPCL Printer State File\n") < 0 ||
+      fprintf(fp, "# Auto-generated - do not edit manually\n") < 0 ||
+      fprintf(fp, STATE_FIELD_WIDTH "=%d\n", state->last_print_width) < 0 ||
+      fprintf(fp, STATE_FIELD_HEIGHT "=%d\n", state->last_print_height) < 0 ||
+      fprintf(fp, STATE_FIELD_GAP "=%d\n", state->last_label_gap) < 0 ||
+      fprintf(fp, STATE_FIELD_MARGIN "=%d\n", state->last_roll_margin) < 0)
+  {
+    fclose(fp);
+    papplLogPrinter(printer, PAPPL_LOGLEVEL_ERROR, "Failed to write state file");
+    return false;
+  }
 
   fclose(fp);
 
@@ -306,16 +287,10 @@ state_has_changed(
   int                        m
 )
 {
-  if (!state->initialized)
-    return false;
-
-  return
-  (
-    state->last_print_width != w ||
-    state->last_print_height != h ||
-    state->last_label_gap != g ||
-    state->last_roll_margin != m
-  );
+  return (state->last_print_width != w ||
+          state->last_print_height != h ||
+          state->last_label_gap != g ||
+          state->last_roll_margin != m);
 }
 
 

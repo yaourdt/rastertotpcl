@@ -206,21 +206,31 @@ sudo tail -f /tmp/pappl$(pidof tpcl-printer-app).log
 
 ### Configuration Files
 
-| File | Purpose | Example Name | Location |
-|------|---------|--------------|----------|
-| Configuration file | Stores server options | `tpcl-printer-app.conf` | `/etc`, `/usr/local/etc`, `$HOME/snap/<BASENAME>/common` (Snap), `/Library/Application Support` (macOS) |
-| State file | Stores printer and job states | `tpcl-printer-app.state` | Same as configuration file locations |
+**System state file** (`tpcl-printer-app.state` - stores system and printer configuration):
+* Root (Linux/BSD): `/var/lib/tpcl-printer-app.state`
+* User (Linux/BSD): `$XDG_CONFIG_HOME/tpcl-printer-app.state` (if set) or `$HOME/.config/tpcl-printer-app.state`
+* User (macOS): `$HOME/Library/Application Support/tpcl-printer-app.state`
+* Snap: `$SNAP_COMMON/tpcl-printer-app.state`
+* Fallback: `/tmp/tpcl-printer-app<uid>.state`
 
-**Additional settings directories:**
+**Spool directory** (contains jobs and per-printer state file for label size tracking):
+* Root (Linux/BSD): `/var/spool/tpcl-printer-app/`
+* User (Linux/BSD): `$HOME/.config/tpcl-printer-app.d/`
+* User (macOS): `$HOME/Library/Application Support/tpcl-printer-app.d/`
+* Snap: `$SNAP_COMMON/tpcl-printer-app.d/`
+* Fallback: `/tmp/tpcl-printer-app<uid>.d/`
 
-* macOS: `/Library/Application Support/tpcl-printer-app/`
-* Unix/Linux: `/usr/local/etc/tpcl-printer-app/`
+**Configuration file** (`tpcl-printer-app.conf` - stores server options, loaded in order):
+* User (Linux/BSD): `$XDG_CONFIG_HOME/tpcl-printer-app.conf` (if set) or `$HOME/.config/tpcl-printer-app.conf`
+* User (macOS): `$HOME/Library/Application Support/tpcl-printer-app.conf`
+* System (Linux/BSD): `/usr/local/etc/tpcl-printer-app.conf`, then `/etc/tpcl-printer-app.conf`
+* System (macOS): `/Library/Application Support/tpcl-printer-app.conf`
+* Snap: `$SNAP_COMMON/tpcl-printer-app.conf`
 
 **Logs:**
-
 * Default: system logging provider
 * Debug mode: `/tmp/pappl<pid>.log`
-* Nibble mode dump (debug only): `/tmp/rastertotpcl-nibble-dump-%d.out`
+* Nibble mode dump (debug only): `/tmp/rastertotpcl-nibble-dump-<pid>.out`
 
 ## Project History
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Generate version string from git
+# Generate version string from git and update RPM spec file
 #
 # Version logic:
 # - If on a tagged commit: use the tag (e.g., v0.2.2 -> 0.2.2)
@@ -7,6 +7,7 @@
 # - If files have changed: append '-dirty' suffix
 
 OUTPUT_FILE="src/version.h"
+SPEC_FILE="tpcl-printer-app.spec"
 
 # Try to get exact tag at current commit
 VERSION=$(git describe --tags --exact-match 2>/dev/null)
@@ -36,3 +37,10 @@ cat > "$OUTPUT_FILE" << EOF
 EOF
 
 echo "Generated version: $VERSION"
+
+# Update RPM spec file version if it exists
+if [ -f "$SPEC_FILE" ]; then
+    # Update Version: line in spec file
+    sed -i "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
+    echo "Updated RPM spec version to: $VERSION"
+fi

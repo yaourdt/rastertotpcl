@@ -4,8 +4,11 @@ Release:        1%{?dist}
 Summary:        Printer driver for Toshiba TEC TPCL label printers
 %global pappl_version 1.4.9
 
-License:        GPL-3.0-or-later
+# Main application is GPL-3.0-or-later, but bundles PAPPL (Apache-2.0) statically
+License:        GPL-3.0-or-later AND Apache-2.0
 URL:            https://github.com/yaourdt/rastertotpcl
+# Bundled libraries
+Provides:       bundled(pappl) = %{pappl_version}
 Source0:        %{name}-%{version}.tar.gz
 Source1:        https://github.com/michaelrsweet/pappl/releases/download/v%{pappl_version}/pappl-%{pappl_version}.tar.gz#/pappl-%{pappl_version}.tar.gz
 Source2:        tpcl-printer-app.service

@@ -466,10 +466,11 @@ void tpcl_identify_cb(
   const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
   char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-  // Feed speed (use default speed from driver data as hex char)
-  char speed_char = '0' + driver_data.speed_default;
-  if (driver_data.speed_default > 9)
-    speed_char = 'A' + (driver_data.speed_default - 10);
+  // Feed speed (retrieve from vendor option with fallback to 3)
+  int print_speed = tpcl_get_int_option(printer_attrs, "print-speed", 3, NULL, printer);
+  char speed_char = '0' + print_speed;
+  if (print_speed > 9)
+    speed_char = 'A' + (print_speed - 10);
 
   // Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
   char ribbon_char = '0';
@@ -840,10 +841,11 @@ tpcl_rstartjob_cb(
       const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", job, NULL);
       char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-      // d: Feed speed (use default speed from driver data as hex char)
-      char speed_char = '0' + driver_data.speed_default;
-      if (driver_data.speed_default > 9)
-        speed_char = 'A' + (driver_data.speed_default - 10);
+      // d: Feed speed (retrieve from vendor option with fallback to 3)
+      int print_speed = tpcl_get_int_option(printer_attrs, "print-speed", 3, job, NULL);
+      char speed_char = '0' + print_speed;
+      if (print_speed > 9)
+        speed_char = 'A' + (print_speed - 10);
 
       // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
       char ribbon_char = '0';
@@ -1224,10 +1226,11 @@ tpcl_rendpage_cb(
   const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", job, NULL);
   char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-  // e: Issue speed (use default speed from driver data as hex char)
-  char speed_char = '0' + driver_data.speed_default;
-  if (driver_data.speed_default > 9)
-    speed_char = 'A' + (driver_data.speed_default - 10);
+  // e: Issue speed (retrieve from vendor option with fallback to 3)
+  int print_speed = tpcl_get_int_option(printer_attrs, "print-speed", 3, job, NULL);
+  char speed_char = '0' + print_speed;
+  if (print_speed > 9)
+    speed_char = 'A' + (print_speed - 10);
 
   // f: With/without ribbon (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
   char ribbon_char = '0';
@@ -1432,10 +1435,11 @@ const char* tpcl_testpage_cb(
     const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
     char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-    // d: Feed speed (use default speed from driver data as hex char)
-    char speed_char = '0' + driver_data.speed_default;
-    if (driver_data.speed_default > 9)
-      speed_char = 'A' + (driver_data.speed_default - 10);
+    // d: Feed speed (retrieve from vendor option with fallback to 3)
+    int print_speed = tpcl_get_int_option(printer_attrs, "print-speed", 3, NULL, printer);
+    char speed_char = '0' + print_speed;
+    if (print_speed > 9)
+      speed_char = 'A' + (print_speed - 10);
 
     // e: Ribbon setting (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
     char ribbon_char = '0';
@@ -1506,10 +1510,11 @@ const char* tpcl_testpage_cb(
   const char *feed_mode = tpcl_get_str_option(printer_attrs, "feed-mode", "batch", NULL, printer);
   char feed_mode_char = tpcl_map_feed_mode(feed_mode);
 
-  // e: Issue speed (use default speed from driver data as hex char)
-  char speed_char = '0' + driver_data.speed_default;
-  if (driver_data.speed_default > 9)
-    speed_char = 'A' + (driver_data.speed_default - 10);
+  // e: Issue speed (retrieve from vendor option with fallback to 3)
+  int print_speed = tpcl_get_int_option(printer_attrs, "print-speed", 3, NULL, printer);
+  char speed_char = '0' + print_speed;
+  if (print_speed > 9)
+    speed_char = 'A' + (print_speed - 10);
 
   // f: With/without ribbon (0=direct thermal or thermal transfer without ribbon, 1=tt with ribbon saving, 2=tt without ribbon saving)
   char ribbon_char = '0';

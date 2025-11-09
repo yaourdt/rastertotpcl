@@ -89,6 +89,7 @@ jobs:
 
       - name: Create/Update GitHub Release & upload assets
         uses: softprops/action-gh-release@v2
+        if: ${{ env.ACT != 'true' }}
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true

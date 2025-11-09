@@ -13,6 +13,7 @@
  */
 
 #include "tpcl-driver.h"
+#include "version.h"
 
 
 /*
@@ -34,7 +35,7 @@ main(int  argc,
   return papplMainloop(
       argc,                               // Number of command line arguments
       argv,                               // Command line arguments
-      "0.2.0",                            // Version number
+      TPCL_VERSION,                       // Version number (auto-generated)
       footer,                             // Footer HTML or NULL for none
       tpcl_drivers_count,                 // Number of drivers
       (pappl_pr_driver_t *)tpcl_drivers,  // Driver information array

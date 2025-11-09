@@ -15,6 +15,8 @@ all:
 		echo "Generating missing icon headers..."; \
 		./scripts/generate-icon-headers.sh; \
 	fi
+	@echo "Generating version header..."
+	@./scripts/generate-version.sh
 	@mkdir -p $(BINDIR)
 	@$(MAKE) -C $(SRCDIR) all
 
@@ -26,6 +28,8 @@ full:
 	@./scripts/patch-translations.sh
 	@echo "Generating embedded icon headers..."
 	@./scripts/generate-icon-headers.sh
+	@echo "Generating version header..."
+	@./scripts/generate-version.sh
 	@echo "Rebuilding PAPPL from scratch, keeping config..."
 	@$(MAKE) -C $(PAPPL_DIR) clean
 	@if [ -n "$$ARCHFLAGS" ]; then \
@@ -60,6 +64,7 @@ clean:
 	@$(MAKE) -C $(SRCDIR) clean
 	@rm -rf $(BINDIR)
 	@rm -f $(SRCDIR)/icon-*.h
+	@rm -f $(SRCDIR)/version.h
 	@echo "Clean complete."
 
 # Install the application to system directories

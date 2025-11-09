@@ -2,4 +2,5 @@
 *.o
 /bin
 /src/icon-*.h
+/src/version.h
 

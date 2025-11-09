@@ -16,11 +16,16 @@ BuildRequires:  make
 BuildRequires:  ImageMagick
 BuildRequires:  pkgconfig
 BuildRequires:  cups-devel
+%if 0%{?suse_version}
 BuildRequires:  libjpeg8-devel
+BuildRequires:  libusb-1_0-devel
+%else
+BuildRequires:  libjpeg-devel
+BuildRequires:  libusb1-devel
+%endif
 BuildRequires:  libpng-devel
 BuildRequires:  zlib-devel
 BuildRequires:  openssl-devel
-BuildRequires:  libusb-1_0-devel
 BuildRequires:  pam-devel
 BuildRequires:  avahi-devel
 
@@ -48,13 +53,13 @@ mv pappl-%{pappl_version} external/pappl
 %build
 export GIT_COMMIT=%{version}
 # Build PAPPL first
-pushd external/pappl
+cd external/pappl
 ./configure --prefix=%{_prefix}
-popd
+cd ../..
 ./scripts/patch-translations.sh
-pushd external/pappl
+cd external/pappl
 %make_build
-popd
+cd ../..
 # Build tpcl-printer-app with package-build flag
 %make_build package-build=1
 

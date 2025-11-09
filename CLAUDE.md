@@ -132,6 +132,80 @@ The application version is automatically generated during build from git:
 - When ready, the release branch is merged to `main` and tagged
 - Never develop directly on `main`
 
+## Testing GitHub Actions Locally with Act
+
+The GitHub Actions release workflow can be tested locally using [act](https://github.com/nektos/act).
+
+### Prerequisites
+
+Install act on your system. On macOS:
+```bash
+brew install act
+```
+
+### Important: Commit Changes Before Testing
+
+**CRITICAL:** You must commit any changes to `tpcl-printer-app.spec` or other files before testing with act. The `make clean` command resets the spec file using `git checkout`, which will remove any uncommitted changes.
+
+### Before Every Test Run
+
+1. **Check and update the current version:**
+   ```bash
+   ./scripts/generate-version.sh
+   cat src/version.h
+   ```
+   This will show you the current version that will be used (e.g., `351e8a86.dirty`).
+
+2. **Create/update the tag event file** at `/tmp/tag-push-event.json` with the current version:
+   ```json
+   {
+     "ref": "refs/tags/v351e8a86.dirty",
+     "ref_name": "v351e8a86.dirty",
+     "ref_type": "tag",
+     "repository": {
+       "name": "rastertotpcl",
+       "full_name": "yaourdt/rastertotpcl"
+     }
+   }
+   ```
+   Replace `351e8a86.dirty` with your actual version from step 1.
+
+3. **If the version changed** (because you made new commits), update the event file to match.
+
+### Running the Tests
+
+Test the build job:
+```bash
+act push -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+  --artifact-server-path=/tmp/act-artifacts \
+  -e /tmp/tag-push-event.json \
+  -j build
+```
+
+This will:
+- Build the application
+- Create a binary tarball
+- Build the RPM package
+- Upload artifacts to `/tmp/act-artifacts/`
+
+### Checking the Results
+
+After a successful run, check the generated artifacts:
+```bash
+ls -lhR /tmp/act-artifacts/
+```
+
+Extract and inspect the RPM:
+```bash
+unzip -l /tmp/act-artifacts/1/rpm-package/rpm-package.zip
+```
+
+### Common Issues
+
+- **Version mismatch errors**: The version in the event file doesn't match the current git state. Run `./scripts/generate-version.sh` and update the event file.
+- **Spec file reset**: Uncommitted changes to `tpcl-printer-app.spec` were lost. Commit your changes before running act.
+- **Long build times**: The first run downloads Docker images and builds PAPPL from scratch (~60 seconds). Subsequent runs are faster if the container is cached.
+
 ## Notes for Development
 
 - The project is actively being developed in the `src/` directory

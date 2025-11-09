@@ -47,6 +47,11 @@ echo "Generated version: $VERSION"
 # Update RPM spec file version if it exists
 if [ -f "$SPEC_FILE" ]; then
     # Update Version: line in spec file
-    sed -i "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
+    # Use portable sed syntax that works on both macOS and Linux
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
+    else
+        sed -i "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
+    fi
     echo "Updated RPM spec version to: $VERSION"
 fi

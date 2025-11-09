@@ -74,10 +74,91 @@ jobs:
           name: ${{ steps.name.outputs.name }}
           path: dist/${{ steps.name.outputs.name }}.tar.gz
 
+  build-rpm:
+    name: Build RPM package
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            git rpm-build rpmdevtools \
+            gcc make pkgconfig ImageMagick \
+            cups-devel libjpeg-devel libpng-devel zlib-devel \
+            openssl-devel libusbx-devel pam-devel avahi-devel \
+            systemd-rpm-macros wget
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show tool versions
+        run: |
+          uname -a || true
+          gcc --version || true
+          pkg-config --version || true
+          convert --version | head -n 1 || true
+          rpm --version || true
+
+      - name: Setup RPM build tree
+        run: |
+          rpmdev-setuptree
+
+      - name: Determine version
+        id: version
+        run: |
+          # Strip leading 'v' in tag for version
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      - name: Prepare RPM sources
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Copy spec file
+          cp tpcl-printer-app.spec ~/rpmbuild/SPECS/
+
+          # Copy systemd service file to SOURCES
+          cp tpcl-printer-app.service ~/rpmbuild/SOURCES/
+
+          # Download PAPPL source (as specified in Source1 of the spec)
+          PAPPL_VERSION=1.4.9
+          wget -O ~/rpmbuild/SOURCES/pappl-${PAPPL_VERSION}.tar.gz \
+            https://github.com/michaelrsweet/pappl/releases/download/v${PAPPL_VERSION}/pappl-${PAPPL_VERSION}.tar.gz
+
+          # Create source tarball (exclude external/pappl as it's downloaded by spec)
+          mkdir -p /tmp/rpm-source
+          TARBALL_DIR="tpcl-printer-app-${VERSION}"
+          cp -r . "/tmp/rpm-source/${TARBALL_DIR}"
+          # Remove .git and external/pappl from the source tarball
+          rm -rf "/tmp/rpm-source/${TARBALL_DIR}/.git"
+          rm -rf "/tmp/rpm-source/${TARBALL_DIR}/external/pappl"
+          # Create the tarball
+          cd /tmp/rpm-source
+          tar -czf ~/rpmbuild/SOURCES/tpcl-printer-app-${VERSION}.tar.gz "${TARBALL_DIR}"
+
+      - name: Build RPM
+        run: |
+          cd ~/rpmbuild
+          rpmbuild -ba SPECS/tpcl-printer-app.spec
+
+      - name: Collect RPM artifacts
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/dist
+          find ~/rpmbuild/RPMS -name "*.rpm" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
+          ls -lh $GITHUB_WORKSPACE/dist/
+
+      - name: Upload RPM artifact (workflow)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: dist/*.rpm
+
   publish:
     name: Publish GitHub Release assets
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-rpm]
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -95,3 +176,4 @@ jobs:
           generate_release_notes: true
           files: |
             dist/**/*.tar.gz
+            dist/**/*.rpm

@@ -1,14 +1,18 @@
 #!/bin/bash
-# Generate version string from git and update RPM spec file
+# Generate version string from git and update version files
 #
 # Version logic:
 # - If GIT_COMMIT env var is set: use that value
 # - If on a tagged commit: use the tag (e.g., v0.2.2 -> 0.2.2)
 # - If not on tagged commit: use first 8 digits of commit hash (e.g., 07c193ce)
 # - If files have changed: append '-dirty' suffix
+#
+# Updates @@VERSION@@ placeholder in:
+# - tpcl-printer-app.spec
+# - debian/changelog
 
 OUTPUT_FILE="src/version.h"
-SPEC_FILE="tpcl-printer-app.spec"
+VERSION_FILES="tpcl-printer-app.spec debian/changelog"
 
 # Check if GIT_COMMIT environment variable is set
 if [ -n "$GIT_COMMIT" ]; then
@@ -44,14 +48,21 @@ EOF
 
 echo "Generated version: $VERSION"
 
-# Update RPM spec file version if it exists
-if [ -f "$SPEC_FILE" ]; then
-    # Update Version: line in spec file
-    # Use portable sed syntax that works on both macOS and Linux
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
-    else
-        sed -i "s/^Version:.*/Version:        $VERSION/" "$SPEC_FILE"
-    fi
-    echo "Updated RPM spec version to: $VERSION"
+# For Debian packaging: version must start with a digit
+# If version starts with a letter (git hash), prepend "0."
+if ! echo "$VERSION" | grep -q '^[0-9]'; then
+    VERSION="0.${VERSION}"
 fi
+
+# Update @@VERSION@@ placeholder in all version files
+for file in $VERSION_FILES; do
+    if [ -f "$file" ]; then
+        # Use portable sed syntax that works on both macOS and Linux
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/@@VERSION@@/$VERSION/g" "$file"
+        else
+            sed -i "s/@@VERSION@@/$VERSION/g" "$file"
+        fi
+        echo "Updated version in: $file (version: $VERSION)"
+    fi
+done

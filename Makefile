@@ -71,6 +71,10 @@ clean:
 	@rm -rf $(BINDIR)
 	@rm -f $(SRCDIR)/icon-*.h
 	@rm -f $(SRCDIR)/version.h
+	@echo "Resetting RPM spec file..."
+	@git checkout -- tpcl-printer-app.spec 2>/dev/null || true
+	@echo "Resetting PAPPL submodule..."
+	@git submodule update --init --force external/pappl
 	@echo "Clean complete."
 
 # Install the application to system directories
@@ -89,7 +93,7 @@ help:
 	@echo "  make            - Build the application (default)"
 	@echo "  make full       - Clean and rebuild everything including PAPPL"
 	@echo "  make pappl-init - Initializes PAPPL submodule if needed"
-	@echo "  make clean      - Remove all build artifacts"
+	@echo "  make clean      - Remove build artifacts, reset RPM spec and PAPPL submodule"
 	@echo "  make install    - Install to system directories (requires sudo)"
 	@echo "  make uninstall  - Remove from system directories (requires sudo)"
 	@echo "  make help       - Show this help message"

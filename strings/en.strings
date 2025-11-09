@@ -34,5 +34,5 @@
 "feed-adjustment" = "Feed Adjustment (0.1mm)";
 "cut-position-adjustment" = "Cut Position Adjustment (0.1mm)";
 "backfeed-adjustment" = "Backfeed Adjustment (0.1mm)";
-"print-speed" = "Print Speed (ips)";
+"print-speed" = "Print Speed";
 "print-darkness" = "Print Darkness";

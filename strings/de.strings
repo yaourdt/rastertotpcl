@@ -34,5 +34,5 @@
 "feed-adjustment" = "Feed-Feinjustierung (0.1mm)";
 "cut-position-adjustment" = "Schnittpositions-Feinjustierung (0.1mm)";
 "backfeed-adjustment" = "Backfeed-Feinjustierung (0.1mm)";
-"print-speed" = "Druckgeschwindigkeit (ips)";
+"print-speed" = "Druckgeschwindigkeit";
 "print-darkness" = "Druckintensität";

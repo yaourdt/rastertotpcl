@@ -4,3 +4,13 @@
 /src/icon-*.h
 /src/version.h
 
+# Debian build artifacts
+*.deb
+*.buildinfo
+*.changes
+debian/.debhelper/
+debian/tpcl-printer-app/
+debian/files
+debian/*.substvars
+debian/*.log
+debian/debhelper-build-stamp

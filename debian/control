@@ -1,0 +1,40 @@
+Source: tpcl-printer-app
+Section: net
+Priority: optional
+Maintainer: Mark Dornbach <mark@dornbach.io>
+Build-Depends: debhelper-compat (= 13),
+               build-essential,
+               gcc,
+               make,
+               pkg-config,
+               imagemagick,
+               libcups2-dev,
+               libjpeg-dev,
+               libusb-1.0-0-dev,
+               libpng-dev,
+               zlib1g-dev,
+               libssl-dev,
+               libpam0g-dev,
+               libavahi-client-dev,
+               wget | curl
+Standards-Version: 4.6.2
+Homepage: https://github.com/yaourdt/rastertotpcl
+Vcs-Browser: https://github.com/yaourdt/rastertotpcl
+Vcs-Git: https://github.com/yaourdt/rastertotpcl.git
+Rules-Requires-Root: no
+
+Package: tpcl-printer-app
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libcups2,
+         libavahi-client3,
+         libavahi-common3,
+         systemd
+Description: Printer driver for Toshiba TEC TPCL label printers
+ This is a modern printer application for Toshiba TEC label printers
+ that use the TPCL (TEC Printer Command Language) version 2 protocol.
+ .
+ It provides IPP-compatible printing with a convenient web-based
+ interface for configuring printer settings, replacing the older
+ PPD-based driver system.

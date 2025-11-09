@@ -1,0 +1,58 @@
+#!/usr/bin/make -f
+
+# PAPPL version (must match tpcl-printer-app.spec)
+PAPPL_VERSION = 1.4.9
+
+# Debian policy requires that binaries go to /usr, not /usr/local
+export PREFIX = /usr
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	# Clean build artifacts
+	[ ! -f Makefile ] || $(MAKE) clean
+	# Clean PAPPL if it exists
+	[ ! -d external/pappl ] || $(MAKE) -C external/pappl clean || true
+	dh_auto_clean
+
+override_dh_auto_configure:
+	# Download and extract PAPPL if not already present
+	if [ ! -d external/pappl/pappl ]; then \
+		mkdir -p external; \
+		if command -v wget >/dev/null 2>&1; then \
+			wget -O /tmp/pappl-$(PAPPL_VERSION).tar.gz \
+				https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
+		else \
+			curl -L -o /tmp/pappl-$(PAPPL_VERSION).tar.gz \
+				https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
+		fi; \
+		tar -xzf /tmp/pappl-$(PAPPL_VERSION).tar.gz -C external/; \
+		mv external/pappl-$(PAPPL_VERSION) external/pappl; \
+		rm -f /tmp/pappl-$(PAPPL_VERSION).tar.gz; \
+	fi
+	# Configure PAPPL
+	cd external/pappl && ./configure --prefix=$(PREFIX)
+
+override_dh_auto_build:
+	# Apply PAPPL translations patch
+	./scripts/patch-translations.sh
+	# Build PAPPL first
+	$(MAKE) -C external/pappl
+	# Build tpcl-printer-app with package-build flag
+	$(MAKE) package-build=1
+
+override_dh_auto_install:
+	# Install binary
+	install -D -m 0755 bin/tpcl-printer-app \
+		$(CURDIR)/debian/tpcl-printer-app$(PREFIX)/bin/tpcl-printer-app
+	# Install systemd service file
+	install -D -m 0644 tpcl-printer-app.service \
+		$(CURDIR)/debian/tpcl-printer-app/lib/systemd/system/tpcl-printer-app.service
+
+override_dh_installdocs:
+	dh_installdocs README.md
+
+override_dh_installsystemd:
+	# Do not enable or start the service by default, let user decide
+	dh_installsystemd --no-enable --no-start

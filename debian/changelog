@@ -1,0 +1,6 @@
+tpcl-printer-app (@@VERSION@@-1) unstable; urgency=medium
+
+  * Initial Debian package
+  * For full changelog, see https://github.com/yaourdt/rastertotpcl
+
+ -- Mark Dornbach <mark@dornbach.io>  Sat, 09 Nov 2025 12:00:00 +0000

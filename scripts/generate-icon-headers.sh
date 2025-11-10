@@ -68,8 +68,12 @@ EOF
 
     echo "};" >> "$HEADER_FILE"
 
-    # Get file size
-    FILE_SIZE=$(stat -c%s "$TEMP_PNG")
+    # Get file size (BSD stat on macOS uses -f, GNU stat uses -c)
+    if stat -f%z "$TEMP_PNG" &>/dev/null; then
+        FILE_SIZE=$(stat -f%z "$TEMP_PNG")
+    else
+        FILE_SIZE=$(stat -c%s "$TEMP_PNG")
+    fi
 
     # Add size constant
     cat >> "$HEADER_FILE" << EOF

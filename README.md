@@ -380,7 +380,7 @@ Running `make help` will give you further options.
 
 ### 7.3 Build System Notes
 
-- **Translations**: Patched directly into PAPPL during the build process. See `/scripts` for details.
+- **Translations**: Patched directly into PAPPL during the build process. See `/scripts` for details. This is why we statically link PAPPL and ship it with the binary.
 - **Icons**: ImageMagick is used to convert icon images to C header files during the build.
 - **Version Management**: The application version is automatically generated during build from git:
   - **On tagged commit**: Uses the tag (e.g., `v0.2.2` → `0.2.2`)
@@ -410,7 +410,7 @@ You should have received a copy of the GNU General Public License along with thi
 
 For certain builds, this binary comes prepacked with PAPPL, which is licensed under the Apache 2.0 license.
 
-### 9.3 Credits and Authors
+### 8.3 Credits and Authors
 
 - **rastertotpcl** is based on the **rastertotec** driver written by Patrick Kong (SKE s.a.r.l)
 - **rastertotec** is based on the **rastertolabel** driver included with the CUPS printing system by Easy Software Products

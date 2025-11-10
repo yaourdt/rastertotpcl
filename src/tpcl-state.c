@@ -10,14 +10,13 @@
  */
 
 #include "tpcl-state.h"
+#include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 
 
 /* State files are managed by PAPPL (platform-specific paths) */
-#define STATE_PATH_MAX 512
-
 
 /* State file field names */
 #define STATE_FIELD_WIDTH  "last_print_width"
@@ -113,7 +112,7 @@ tpcl_state_delete(
   pappl_printer_t *printer
 )
 {
-  char filepath[STATE_PATH_MAX];
+  char filepath[PATH_MAX];
   int fd;
 
   fd = open_state_file(printer, "x", filepath, sizeof(filepath));
@@ -139,7 +138,7 @@ open_state_file(
   size_t          filepath_size
 )
 {
-  char path[STATE_PATH_MAX];
+  char path[PATH_MAX];
   int fd;
 
   fd = papplPrinterOpenFile(printer, path, sizeof(path), NULL, "labelstate", "state", mode);
@@ -163,10 +162,10 @@ load_state_from_file(
   tpcl_printer_state_t *state
 )
 {
-  char filepath[STATE_PATH_MAX];
+  char filepath[PATH_MAX];
   int  fd;
   FILE *fp;
-  char line[STATE_PATH_MAX];
+  char line[PATH_MAX];
   int loaded_width = -1, loaded_height = -1, loaded_gap = -1, loaded_margin = -1;
 
   // Open state file using PAPPL
@@ -233,7 +232,7 @@ save_state_to_file(
   const tpcl_printer_state_t *state
 )
 {
-  char filepath[STATE_PATH_MAX];
+  char filepath[PATH_MAX];
   int  fd;
   FILE *fp;
 

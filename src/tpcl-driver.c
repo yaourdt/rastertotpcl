@@ -35,7 +35,7 @@ typedef struct {
   int                      print_height;                 // Effective print height (0.1mm)
   int                      label_pitch;                  // Label pitch = print height + label gap
   int                      roll_width;                   // Roll width
-  unsigned int             buffer_len;                   // Length of line buffer as sent to printer
+  size_t                   buffer_len;                   // Length of line buffer as sent to printer
   unsigned char            *buffer;                      // Current line buffer
   tpcl_compbuf_t           *compbuf;                     // Compression buffers (for TOPIX)
   int                      y_offset;                     // Y offset for next image in 0.1mm (for TOPIX)
@@ -543,7 +543,7 @@ tpcl_print_cb(
     }
     else
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line too long (exceeds %lu bytes)", sizeof(line));
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Line too long (exceeds %lu bytes)", (unsigned long)sizeof(line));
       line[sizeof(line) - 1] = '\0';
       close(fd);
       return false;
@@ -734,6 +734,13 @@ tpcl_rstartjob_cb(
   papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Maximum image resolution at %ux%udpi: width=%u dots, height=%u dots", options->header.HWResolution[0], options->header.HWResolution[1], (unsigned int) (options->header.HWResolution[0] * options->header.cupsPageSize[0] / POINTS_PER_INCH), (unsigned int) (options->header.HWResolution[1] * options->header.cupsPageSize[1] / POINTS_PER_INCH));
 
   // Calculate buffer length in bytes as sent to printer
+  if (options->header.cupsBitsPerPixel == 0)
+  {
+    papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "Invalid raster data: cupsBitsPerPixel is 0");
+    tpcl_free_job_buffers(job, tpcl_job);
+    ippDelete(printer_attrs);
+    return false;
+  }
   tpcl_job->buffer_len = options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel;
 
   // Validate dimensions are within printer limits before sending label size command
@@ -1022,7 +1029,7 @@ tpcl_rwriteline_cb(
   {
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in hex mode", y, tpcl_job->buffer_len);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %lu bytes in hex mode", y, (unsigned long)tpcl_job->buffer_len);
     }
 
     papplDeviceWrite(device, tpcl_job->buffer, tpcl_job->buffer_len);
@@ -1034,7 +1041,7 @@ tpcl_rwriteline_cb(
 
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %u bytes in nibble mode (ASCII mode)", y, tpcl_job->buffer_len * 2);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Transmitting %lu bytes in nibble mode (ASCII mode)", y, (unsigned long)(tpcl_job->buffer_len * 2));
     }
 
     // Debug output: allocate buffer for ASCII representation file dump
@@ -1106,7 +1113,7 @@ tpcl_rwriteline_cb(
 
     if ((y < 3) | (y > (options->header.cupsHeight - 4)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Compressing %u bytes in TOPIX mode", y, tpcl_job->buffer_len);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: Compressing %lu bytes in TOPIX mode", y, (unsigned long)tpcl_job->buffer_len);
     }
 
     // Compress line using TOPIX algorithm
@@ -1114,18 +1121,18 @@ tpcl_rwriteline_cb(
 
     // Check if compression buffer is getting full, flush if needed. Also flush if this is the last line
     size_t buffer_used      = tpcl_topix_get_buffer_used(tpcl_job->compbuf);
-    size_t buffer_threshold = 0xFFFF - (tpcl_job->buffer_len + ((tpcl_job->buffer_len / 8) * 3));
+    size_t buffer_threshold = TPCL_COMP_BUFFER_MAX - (tpcl_job->buffer_len + ((tpcl_job->buffer_len / 8) * 3));
 
     if ((buffer_used > buffer_threshold) | (y == (options->header.cupsHeight - 1)))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%lu/65535 bytes) or last line, flushing. Y offset for this image: %d (0.1mm)", y, buffer_used, tpcl_job->y_offset);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer full (%lu/65535 bytes) or last line, flushing. Y offset for this image: %d (0.1mm)", y, (unsigned long)buffer_used, tpcl_job->y_offset);
 
       ssize_t bytes_written = tpcl_topix_flush(tpcl_job->compbuf, device, tpcl_job->y_offset, options->header.cupsWidth, options->header.HWResolution[0], tpcl_job->gmode);
 
       // Y offset for next image in 0.1mm (for TOPIX)
       tpcl_job->y_offset = (int) (y + 1) * MM_PER_INCH * 10.0 / options->header.HWResolution[0];
 
-      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer flushed, %lu bytes sent. Y offset for next image: %d (0.1mm)", y, bytes_written, tpcl_job->y_offset);
+      papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Line %u: TOPIX buffer flushed, %ld bytes sent. Y offset for next image: %d (0.1mm)", y, (long)bytes_written, tpcl_job->y_offset);
     }
   }
   else

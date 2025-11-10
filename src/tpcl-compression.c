@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 
 /*
@@ -51,7 +52,7 @@ tpcl_compbuf_create(
 
   compbuf->line_bytes  = line_bytes;
   compbuf->last_buffer = (unsigned char *)calloc(line_bytes, 1);
-  compbuf->comp_buffer = (unsigned char *)calloc(0xFFFF, 1);
+  compbuf->comp_buffer = (unsigned char *)calloc(TPCL_COMP_BUFFER_MAX, 1);
 
   if (!compbuf->last_buffer || !compbuf->comp_buffer)
   {
@@ -101,7 +102,7 @@ tpcl_compbuf_reset(
   if (compbuf)
   {
     memset(compbuf->last_buffer, 0, compbuf->line_bytes);
-    memset(compbuf->comp_buffer, 0, 0xFFFF);
+    memset(compbuf->comp_buffer, 0, TPCL_COMP_BUFFER_MAX);
     compbuf->comp_buffer_ptr = compbuf->comp_buffer;
   }
 }
@@ -218,7 +219,7 @@ tpcl_topix_flush(
   ssize_t                  bytes_written = 0;
 
   len   = (unsigned short)(compbuf->comp_buffer_ptr - compbuf->comp_buffer);
-  belen = (len << 8) | (len >> 8);                       // Convert length to big-endian (network byte order)
+  belen = htons(len);                                    // Convert length to big-endian (network byte order)
 
   if (len == 0)
     return bytes_written;
@@ -241,7 +242,7 @@ tpcl_topix_flush(
   bytes_written += papplDevicePuts (device, "|}\n");
 
   // Reset buffers and pointers
-  memset(compbuf->comp_buffer, 0, 0xFFFF);
+  memset(compbuf->comp_buffer, 0, TPCL_COMP_BUFFER_MAX);
   memset(compbuf->last_buffer, 0, compbuf->line_bytes);
   compbuf->comp_buffer_ptr = compbuf->comp_buffer;
 

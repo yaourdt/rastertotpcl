@@ -30,6 +30,13 @@
 
 
 /*
+ * Compression buffer constants
+ */
+
+#define TPCL_COMP_BUFFER_MAX 0xFFFF                      // Maximum compression buffer size (65535 bytes)
+
+
+/*
  * Opaque compression buffer handle
  */
 

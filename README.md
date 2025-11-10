@@ -38,7 +38,7 @@ This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14**. If you t
 
 ### 2.1 DEB Package (Debian/Ubuntu)
 
-DEB packages are available for Debian, Ubuntu, and derivative distributions. The DEB package includes a systemd service for automatic startup at boot.
+DEB packages are available for Debian, Ubuntu, and derivative distributions. The DEB package includes a systemd service that is automatically enabled and started during installation.
 
 **Installation:**
 
@@ -49,20 +49,17 @@ sudo dpkg -i tpcl-printer-app_*.deb
 sudo apt-get install -f  # Install any missing dependencies
 ```
 
-**Starting the service:**
-
-The service is **not enabled by default**. Enable and start it with:
+The service will start automatically after installation. You can verify it is running with:
 
 ```bash
-sudo systemctl enable tpcl-printer-app
-sudo systemctl start tpcl-printer-app
+sudo systemctl status tpcl-printer-app
 ```
 
 ### 2.2 RPM Package (RHEL/Fedora/openSUSE)
 
 **Note:** RPM packages are currently unsigned.
 
-RPM packages are available for RPM-based Linux distributions. The RPM package includes a systemd service for automatic startup at boot.
+RPM packages are available for RPM-based Linux distributions. The RPM package includes a systemd service that is automatically enabled and started during installation.
 
 **Installation:**
 
@@ -72,13 +69,10 @@ Download the appropriate RPM package and install it:
 sudo rpm -i tpcl-printer-app-*.rpm
 ```
 
-**Starting the service:**
-
-The service is **not enabled by default**. Enable and start it with:
+The service will start automatically after installation. You can verify it is running with:
 
 ```bash
-sudo systemctl enable tpcl-printer-app
-sudo systemctl start tpcl-printer-app
+sudo systemctl status tpcl-printer-app
 ```
 
 ### 2.3 Manual Installation from Source
@@ -107,11 +101,13 @@ sudo systemctl stop tpcl-printer-app
 sudo systemctl restart tpcl-printer-app
 ```
 
-**Enabling/disabling automatic startup at boot (DEB/RPM installations):**
+**Managing automatic startup at boot (DEB/RPM installations):**
+
+The service is automatically enabled during package installation. To disable or re-enable:
 
 ```bash
-sudo systemctl enable tpcl-printer-app
 sudo systemctl disable tpcl-printer-app
+sudo systemctl enable tpcl-printer-app
 ```
 
 **Checking service status (DEB/RPM installations):**

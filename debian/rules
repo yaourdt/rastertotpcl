@@ -54,5 +54,5 @@ override_dh_installdocs:
 	dh_installdocs README.md
 
 override_dh_installsystemd:
-	# Do not enable or start the service by default, let user decide
-	dh_installsystemd --no-enable --no-start
+	# Enable and start the service automatically on installation
+	dh_installsystemd --enable --start

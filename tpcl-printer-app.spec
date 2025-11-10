@@ -74,6 +74,12 @@ install -Dm0644 %{SOURCE2} \
 
 %post
 %systemd_post tpcl-printer-app.service
+# Enable and start the service on installation
+if [ $1 -eq 1 ]; then
+    # Initial installation
+    systemctl enable tpcl-printer-app.service >/dev/null 2>&1 || :
+    systemctl start tpcl-printer-app.service >/dev/null 2>&1 || :
+fi
 
 %preun
 %systemd_preun tpcl-printer-app.service

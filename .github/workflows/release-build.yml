@@ -2,7 +2,6 @@ name: Release builds (tag)
 
 on:
   push:
-    # Trigger on version tags
     tags:
       - 'v*'
 
@@ -26,7 +25,6 @@ jobs:
         with:
           submodules: recursive
 
-      # --- OS deps ----------------------------------------------------------
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -37,7 +35,6 @@ jobs:
             libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
             imagemagick
 
-      # --- Build ------------------------------------------------------------
       - name: Show tool versions
         run: |
           uname -a || true
@@ -49,7 +46,6 @@ jobs:
         run: |
           make full
 
-      # --- Package artifact -------------------------------------------------
       - name: Determine archive name
         id: name
         shell: bash
@@ -115,6 +111,12 @@ jobs:
       - name: Prepare RPM sources
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+
+          # Set GIT_COMMIT for version generation
+          export GIT_COMMIT="${VERSION}"
+
+          # Generate version in spec file
+          ./scripts/generate-version.sh
 
           # Copy spec file
           cp tpcl-printer-app.spec ~/rpmbuild/SPECS/
@@ -189,7 +191,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
 
-      - name: Prepare Debian package build
+      - name: Debian package build
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 

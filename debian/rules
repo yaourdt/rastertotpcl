@@ -48,11 +48,11 @@ override_dh_auto_install:
 		$(CURDIR)/debian/tpcl-printer-app$(PREFIX)/bin/tpcl-printer-app
 	# Install systemd service file
 	install -D -m 0644 tpcl-printer-app.service \
-		$(CURDIR)/debian/tpcl-printer-app/lib/systemd/system/tpcl-printer-app.service
+		$(CURDIR)/debian/tpcl-printer-app/usr/lib/systemd/system/tpcl-printer-app.service
 
 override_dh_installdocs:
 	dh_installdocs README.md
 
 override_dh_installsystemd:
 	# Enable and start the service automatically on installation
-	dh_installsystemd --enable --start
+	dh_installsystemd

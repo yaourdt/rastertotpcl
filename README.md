@@ -123,6 +123,8 @@ Once the server is running, access the web interface at:
 ```
 http://localhost:8000
 ```
+**Note:** When adding a network printer, explicitly state the port (Toshiba default: 8000) as <ip>:<port> in the webinterface for the printer to be found. Alternatively, you may change the listening port on the printer to 9100 (PAPPL default) using the Toshiba settings tool.
+
 
 ### 3.3 Printer Identification Feature
 

@@ -741,7 +741,12 @@ tpcl_rstartjob_cb(
     ippDelete(printer_attrs);
     return false;
   }
-  tpcl_job->buffer_len = options->header.cupsBytesPerLine / options->header.cupsBitsPerPixel;
+
+  // For 8-bit grayscale input, after dithering we have 1 bit per pixel
+  // For 1-bit input, it's already packed
+  // In both cases, calculate the packed size: ceil(width / 8)
+  tpcl_job->buffer_len = (options->header.cupsWidth + 7) / 8;
+  papplLogJob(job, PAPPL_LOGLEVEL_DEBUG, "Calculated buffer_len=%zu bytes (for %u pixels)", tpcl_job->buffer_len, options->header.cupsWidth);
 
   // Validate dimensions are within printer limits before sending label size command
   // 203dpi: pitch max 9990 (999.0mm), height max 9970 (997.0mm)

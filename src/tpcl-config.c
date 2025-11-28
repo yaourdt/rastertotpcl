@@ -26,19 +26,21 @@
  */
 
 const pappl_pr_driver_t tpcl_drivers[] = {
-  {"B-SA4G",      "Tec B-SA4G",      "CMD:TPCL",             NULL},
-  {"B-SA4T",      "Tec B-SA4T",      "CMD:TPCL",             NULL},
-  {"B-SX4",       "Tec B-SX4",       "CMD:TPCL",             NULL},
-  {"B-SX5",       "Tec B-SX5",       "CMD:TPCL",             NULL},
-  {"B-SX6",       "Tec B-SX6",       "CMD:TPCL",             NULL},
-  {"B-SX8",       "Tec B-SX8",       "CMD:TPCL",             NULL},
-  {"B-482",       "Tec B-482",       "CMD:TPCL",             NULL},
-  {"B-572",       "Tec B-572",       "CMD:TPCL",             NULL},
-  {"B-852R",      "Tec B-852R",      "CMD:TPCL",             NULL},
-  {"B-SV4D",      "Tec B-SV4D",      "CMD:TPCL",             NULL},
-  {"B-SV4T",      "Tec B-SV4T",      "CMD:TPCL",             NULL},
-  {"B-EV4D-GS14", "Tec B-EV4D-GS14", "CMD:TPCL;MDL:B-EV4-G", NULL},
-  {"B-EV4T-GS14", "Tec B-EV4T-GS14", "CMD:TPCL;MDL:B-EV4-G", NULL}
+  {"B-SA4G",      "Tec B-SA4G",            "CMD:TPCL",             NULL},
+  {"B-SA4T",      "Tec B-SA4T",            "CMD:TPCL",             NULL},
+  {"B-SX4",       "Tec B-SX4",             "CMD:TPCL",             NULL},
+  {"B-SX5",       "Tec B-SX5",             "CMD:TPCL",             NULL},
+  {"B-SX6",       "Tec B-SX6",             "CMD:TPCL",             NULL},
+  {"B-SX8",       "Tec B-SX8",             "CMD:TPCL",             NULL},
+  {"B-482",       "Tec B-482",             "CMD:TPCL",             NULL},
+  {"B-572",       "Tec B-572",             "CMD:TPCL",             NULL},
+  {"B-852R",      "Tec B-852R",            "CMD:TPCL",             NULL},
+  {"B-SV4D",      "Tec B-SV4D",            "CMD:TPCL",             NULL},
+  {"B-SV4T",      "Tec B-SV4T",            "CMD:TPCL",             NULL},
+  {"B-EV4D-G",    "Tec B-EV4D-G (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4D-T",    "Tec B-EV4D-T (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4T-G",    "Tec B-EV4T-G (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4T-T",    "Tec B-EV4T-T (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL}
 };
 
 const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);
@@ -60,8 +62,10 @@ const tpcl_printer_t tpcl_printer_properties[] = {
   {"B-852R",       283,   35,  614, 1814, false, true , false, false, {0x2, 0x4, 0x8}},
   {"B-SV4D",        71,   23,  306, 1726, true,  false, false, false, {0x2, 0x3, 0x5}},
   {"B-SV4T",        71,   23,  306, 1726, true,  false, true,  false, {0x2, 0x3, 0x5}},
-  {"B-EV4D-GS14",   71,   23,  306, 1726, true,  true , false, false, {0x2, 0x3, 0x5}},
-  {"B-EV4T-GS14",   71,   23,  306, 1726, true,  true , true,  false, {0x2, 0x3, 0x5}}
+  {"B-EV4D-G",      71,   23,  306, 1726, true,  false, false, false, {0x2, 0x3, 0x5}},
+  {"B-EV4D-T",      71,   23,  306, 1726, false, true,  false, false, {0x2, 0x3, 0x5}},
+  {"B-EV4T-G",      71,   23,  306, 1726, true,  false, true,  false, {0x2, 0x3, 0x5}},
+  {"B-EV4T-T",      71,   23,  306, 1726, false, true,  true,  false, {0x2, 0x3, 0x5}}
 };
 
 

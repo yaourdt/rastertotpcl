@@ -224,6 +224,12 @@ tpcl_topix_flush(
   if (len == 0)
     return bytes_written;
 
+  // Workaround: Printer firmware appears to interpret TOPIX graphics at 203dpi regardless
+  // of the resolution parameter sent in the SG command. When we have 203dpi data, we send
+  // 300 to the printer to compensate. This makes the printer interpret the 203dpi data
+  // correctly without scaling issues.
+  unsigned int printer_resolution = (resolution == 203) ? 300 : resolution;
+
   // Send SG command with compressed data
   snprintf(
     command,
@@ -232,7 +238,7 @@ tpcl_topix_flush(
                                                          // x_origin in 0.1mm
     y_offset,                                            // y_origin in 0.1mm
     width_dots,                                          // width_dots
-    resolution,                                          // in TOPIX mode: Resolution of graphic data (150 or 300 dpi)
+    printer_resolution,                                  // in TOPIX mode: Resolution sent to printer (150 or 300 dpi)
     gmode                                                // graphics mode
   );
 

@@ -60,8 +60,10 @@ Auto-generated from the original 'tectpcl2.drv' file.
 | B-852R | Yes | 283 x 35 | 614 x 1814 | 300dpi | 300dpi | 0 0 0 0 |
 | B-SV4D | Yes | 71 x 23 | 306 x 1726 | 203dpi | 203dpi | 0 0 0 0 |
 | B-SV4T | Yes | 71 x 23 | 306 x 1726 | 203dpi | 203dpi | 0 0 0 0 |
-| B-EV4D-GS14 | Yes | 71 x 23 | 306 x 1726 | 203dpi (TECBEV4GG), 300dpi (TECBEV4TT) | 203dpi | 0 0 0 0 |
-| B-EV4T-GS14 | Yes | 71 x 23 | 306 x 1726 | 203dpi (TECBEV4G), 300dpi (TECBEV4T) | 300dpi | 0 0 0 0 |
+| B-EV4D-G | Yes | 71 x 23 | 306 x 1726 | 203dpi | 203dpi | 0 0 0 0 |
+| B-EV4D-T | Yes | 71 x 23 | 306 x 1726 | 300dpi | 300dpi | 0 0 0 0 |
+| B-EV4T-G | Yes | 71 x 23 | 306 x 1726 | 203dpi | 203dpi | 0 0 0 0 |
+| B-EV4T-T | Yes | 71 x 23 | 306 x 1726 | 300dpi | 300dpi | 0 0 0 0 |
 
 ## Printer-Specific Settings
 
@@ -74,8 +76,8 @@ Auto-generated from the original 'tectpcl2.drv' file.
 | B-852R | (Not specified - inherits general settings) | N/A |
 | B-SV4D | Direct Thermal only | Direct Thermal |
 | B-SV4T | Thermal Transfer, Direct Thermal | Direct Thermal |
-| B-EV4D-GS14 | Direct Thermal only | Direct Thermal |
-| B-EV4T-GS14 | Thermal Transfer, Direct Thermal | Direct Thermal |
+| B-EV4D-G, B-EV4D-T | Direct Thermal only | Direct Thermal |
+| B-EV4T-G, B-EV4T-T | Thermal Transfer, Direct Thermal | Direct Thermal |
 
 ### Print Speed Settings (tePrintRate)
 
@@ -89,7 +91,7 @@ Auto-generated from the original 'tectpcl2.drv' file.
 | B-482 | 76 mm/sec (3), 102 mm/sec (4), 127 mm/sec (5), 203 mm/sec (8) | 127 mm/sec (5) |
 | B-572 | 76 mm/sec (3), 127 mm/sec (5), 203 mm/sec (8) | 127 mm/sec (5) |
 | B-852R | 50.8 mm/sec (2), 101 mm/sec (4), 203 mm/sec (8) | 101 mm/sec (4) |
-| B-SV4D, B-SV4T, B-EV4D-GS14, B-EV4T-GS14 | 50 mm/sec (2), 76.2 mm/sec (3), 101.6 mm/sec (4), 127.0 mm/sec (5) | 76.2 mm/sec (3) |
+| B-SV4D, B-SV4T, B-EV4D-G, B-EV4D-T, B-EV4T-G, B-EV4T-T | 50 mm/sec (2), 76.2 mm/sec (3), 101.6 mm/sec (4), 127.0 mm/sec (5) | 76.2 mm/sec (3) |
 
 ## Notes
 

@@ -23,8 +23,10 @@ Instead of using PPDs, the driver emulates an IPP-compatible printer, allowing a
 | B-852R | 300dpi | Yes |
 | B-SV4D | 203dpi | Yes |
 | B-SV4T | 203dpi | Yes |
-| B-EV4D-GS14 | 203dpi | Yes |
-| B-EV4T-GS14 | 203dpi | Yes |
+| B-EV4D-G | 203dpi | No |
+| B-EV4D-T | 300dpi | No |
+| B-EV4T-G | 203dpi | Yes |
+| B-EV4T-T | 300dpi | Yes |
 
 <sub>¹ All printers support Direct Thermal mode.</sub>
 
@@ -32,7 +34,7 @@ For detailed specifications including print speeds, resolutions, and supported m
 
 ### 1.3 Tested Models
 
-This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14**. If you test with other models, encounter bugs, or can provide specifications for new devices, please [open an issue](https://github.com/yaourdt/rastertotpcl/issues). I will respond as soon as possible, though please note this project is maintained in my spare time.
+This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14** (203dpi variant). If you test with other models, encounter bugs, or can provide specifications for new devices, please [open an issue](https://github.com/yaourdt/rastertotpcl/issues). I will respond as soon as possible, though please note this project is maintained in my spare time.
 
 ## 2. Installation
 

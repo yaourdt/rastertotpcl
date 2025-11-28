@@ -679,12 +679,13 @@ tpcl_rstartjob_cb(
 
   if (tpcl_job->gmode == TEC_GMODE_TOPIX)
   {
-    // Check if resolution is 150 or 300, as TOPIX mode does not work with other resolutions
-    if ((options->header.HWResolution[0] != 150 && options->header.HWResolution[0] != 300) ||
-        (options->header.HWResolution[1] != 150 && options->header.HWResolution[1] != 300) ||
+    // Check if resolution is 150, 203, or 300
+    // Note: 203dpi uses a workaround (see tpcl-compression.c) where we send 300 to the printer
+    if ((options->header.HWResolution[0] != 150 && options->header.HWResolution[0] != 203 && options->header.HWResolution[0] != 300) ||
+        (options->header.HWResolution[1] != 150 && options->header.HWResolution[1] != 203 && options->header.HWResolution[1] != 300) ||
         (options->header.HWResolution[0] != options->header.HWResolution[1]))
     {
-      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "TOPIX mode only supports 150x150 or 300x300 dpi resolution. Requested: %ux%u dpi", options->header.HWResolution[0], options->header.HWResolution[1]);
+      papplLogJob(job, PAPPL_LOGLEVEL_ERROR, "TOPIX mode only supports 150x150, 203x203, or 300x300 dpi resolution. Requested: %ux%u dpi", options->header.HWResolution[0], options->header.HWResolution[1]);
       tpcl_free_job_buffers(job, tpcl_job);
       return false;
     }

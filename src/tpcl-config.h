@@ -14,14 +14,12 @@
 
 #include <pappl/pappl.h>
 
-
 /*
  * Constants for conversion
  */
 
 #define POINTS_PER_INCH 72.0
-#define MM_PER_INCH     25.4
-
+#define MM_PER_INCH 25.4
 
 /*
  * 'tpcl_setup_vendor_options()' - Setup vendor-specific configuration options
@@ -39,11 +37,8 @@
  *   true on success, false on failure
  */
 
-bool tpcl_setup_vendor_options(
-  pappl_pr_driver_data_t   *driver_data,
-  ipp_t                    **driver_attrs
-);
-
+bool tpcl_setup_vendor_options(pappl_pr_driver_data_t *driver_data,
+			       ipp_t **driver_attrs);
 
 /*
  * 'tpcl_setup_driver_common()' - Setup common model-agnostic driver options
@@ -60,11 +55,8 @@ bool tpcl_setup_vendor_options(
  *   true on success, false on failure
  */
 
-bool tpcl_setup_driver_common(
-  pappl_pr_driver_data_t   *driver_data,
-  ipp_t                    **driver_attrs
-);
-
+bool tpcl_setup_driver_common(pappl_pr_driver_data_t *driver_data,
+			      ipp_t **driver_attrs);
 
 /*
  * 'tpcl_setup_driver_model()' - Setup model-specific driver options
@@ -83,13 +75,9 @@ bool tpcl_setup_driver_common(
  *   true on success, false if driver not found or configuration failed
  */
 
-bool tpcl_setup_driver_model(
-  pappl_system_t           *system,
-  const char               *driver_name,
-  pappl_pr_driver_data_t   *driver_data,
-  ipp_t                    **driver_attrs
-);
-
+bool tpcl_setup_driver_model(pappl_system_t *system, const char *driver_name,
+			     pappl_pr_driver_data_t *driver_data,
+			     ipp_t **driver_attrs);
 
 /*
  * 'tpcl_map_sensor_type()' - Map sensor type string to TPCL character
@@ -108,10 +96,7 @@ bool tpcl_setup_driver_model(
  *   TPCL character code for the sensor type
  */
 
-char tpcl_map_sensor_type(
-  const char               *sensor_type
-);
-
+char tpcl_map_sensor_type(const char *sensor_type);
 
 /*
  * 'tpcl_map_cut_type()' - Map cut type string to TPCL character
@@ -127,10 +112,7 @@ char tpcl_map_sensor_type(
  *   TPCL character code for the cut type
  */
 
-char tpcl_map_cut_type(
-  const char               *cut_type
-);
-
+char tpcl_map_cut_type(const char *cut_type);
 
 /*
  * 'tpcl_map_feed_mode()' - Map feed mode string to TPCL character
@@ -148,9 +130,6 @@ char tpcl_map_cut_type(
  *   TPCL character code for the feed mode
  */
 
-char tpcl_map_feed_mode(
-  const char               *feed_mode
-);
-
+char tpcl_map_feed_mode(const char *feed_mode);
 
 #endif // TPCL_CONFIG_H

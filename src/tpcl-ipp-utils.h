@@ -13,7 +13,6 @@
 
 #include <pappl/pappl.h>
 
-
 /*
  * 'tpcl_get_int_option()' - Get integer option from IPP attributes
  *
@@ -31,14 +30,8 @@
  *   Integer value from attribute or default_val if not found
  */
 
-int tpcl_get_int_option(
-  ipp_t                    *attrs,
-  const char               *name,
-  int                      default_val,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+int tpcl_get_int_option(ipp_t *attrs, const char *name, int default_val,
+			pappl_job_t *job, pappl_printer_t *printer);
 
 /*
  * 'tpcl_get_str_option()' - Get string option from IPP attributes
@@ -57,14 +50,9 @@ int tpcl_get_int_option(
  *   String value from attribute or default_val if not found
  */
 
-const char* tpcl_get_str_option(
-  ipp_t                    *attrs,
-  const char               *name,
-  const char               *default_val,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+const char *tpcl_get_str_option(ipp_t *attrs, const char *name,
+				const char *default_val, pappl_job_t *job,
+				pappl_printer_t *printer);
 
 /*
  * 'tpcl_add_vendor_int_option()' - Add integer vendor option
@@ -81,15 +69,9 @@ const char* tpcl_get_str_option(
  *   default_val  - Default value
  */
 
-void tpcl_add_vendor_int_option(
-  pappl_pr_driver_data_t   *driver_data,
-  ipp_t                    **driver_attrs,
-  const char               *name,
-  int                      min,
-  int                      max,
-  int                      default_val
-);
-
+void tpcl_add_vendor_int_option(pappl_pr_driver_data_t *driver_data,
+				ipp_t **driver_attrs, const char *name, int min,
+				int max, int default_val);
 
 /*
  * 'tpcl_add_vendor_str_option()' - Add string vendor option
@@ -106,15 +88,10 @@ void tpcl_add_vendor_int_option(
  *   default_val  - Default value string
  */
 
-void tpcl_add_vendor_str_option(
-  pappl_pr_driver_data_t   *driver_data,
-  ipp_t                    **driver_attrs,
-  const char               *name,
-  int                      num_values,
-  const char               **values,
-  const char               *default_val
-);
-
+void tpcl_add_vendor_str_option(pappl_pr_driver_data_t *driver_data,
+				ipp_t **driver_attrs, const char *name,
+				int num_values, const char **values,
+				const char *default_val);
 
 /*
  * 'tpcl_get_label_dimensions()' - Calculate label dimensions from printer settings
@@ -135,16 +112,10 @@ void tpcl_add_vendor_str_option(
  *   true on success, false on failure
  */
 
-bool tpcl_get_label_dimensions(
-  ipp_t                    *printer_attrs,
-  int                      print_width,
-  int                      print_height,
-  int                      *label_pitch,
-  int                      *roll_width,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+bool tpcl_get_label_dimensions(ipp_t *printer_attrs, int print_width,
+			       int print_height, int *label_pitch,
+			       int *roll_width, pappl_job_t *job,
+			       pappl_printer_t *printer);
 
 /*
  * 'tpcl_get_feed_adjustments()' - Get feed adjustment values from printer settings
@@ -164,14 +135,9 @@ bool tpcl_get_label_dimensions(
  *   true if at least one adjustment is non-zero, false otherwise
  */
 
-bool tpcl_get_feed_adjustments(
-  ipp_t                    *printer_attrs,
-  int                      *feed_adjustment,
-  int                      *cut_position_adjustment,
-  int                      *backfeed_adjustment,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+bool tpcl_get_feed_adjustments(ipp_t *printer_attrs, int *feed_adjustment,
+			       int *cut_position_adjustment,
+			       int *backfeed_adjustment, pappl_job_t *job,
+			       pappl_printer_t *printer);
 
 #endif // TPCL_IPP_HELPERS_H

@@ -13,7 +13,6 @@
 
 #include <pappl/pappl.h>
 
-
 /*
  * 'tpcl_cmd_label_size()' - Generate D command (label size definition)
  *
@@ -32,16 +31,9 @@
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_label_size(
-  pappl_device_t           *device,
-  int                      label_pitch,
-  int                      width,
-  int                      height,
-  int                      roll_width,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_label_size(pappl_device_t *device, int label_pitch, int width,
+			    int height, int roll_width, pappl_job_t *job,
+			    pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_feed()' - Generate T command (feed label)
@@ -62,17 +54,9 @@ ssize_t tpcl_cmd_label_size(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_feed(
-  pappl_device_t           *device,
-  char                     sensor_char,
-  char                     cut_char,
-  char                     mode_char,
-  char                     speed_char,
-  char                     ribbon_char,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_feed(pappl_device_t *device, char sensor_char, char cut_char,
+		      char mode_char, char speed_char, char ribbon_char,
+		      pappl_job_t *job, pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_position_adjust()' - Generate AX command (position fine adjustment)
@@ -91,15 +75,9 @@ ssize_t tpcl_cmd_feed(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_position_adjust(
-  pappl_device_t           *device,
-  int                      feed_adj,
-  int                      cut_adj,
-  int                      backfeed_adj,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_position_adjust(pappl_device_t *device, int feed_adj,
+				 int cut_adj, int backfeed_adj,
+				 pappl_job_t *job, pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_darkness_adjust()' - Generate AY command (print darkness adjustment)
@@ -117,14 +95,9 @@ ssize_t tpcl_cmd_position_adjust(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_darkness_adjust(
-  pappl_device_t           *device,
-  int                      darkness,
-  char                     type_char,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_darkness_adjust(pappl_device_t *device, int darkness,
+				 char type_char, pappl_job_t *job,
+				 pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_clear_buffer()' - Generate C command (clear image buffer)
@@ -140,12 +113,8 @@ ssize_t tpcl_cmd_darkness_adjust(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_clear_buffer(
-  pappl_device_t           *device,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_clear_buffer(pappl_device_t *device, pappl_job_t *job,
+			      pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_graphics_header()' - Generate SG command header (start graphics)
@@ -167,17 +136,10 @@ ssize_t tpcl_cmd_clear_buffer(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_graphics_header(
-  pappl_device_t           *device,
-  int                      x_origin,
-  int                      y_origin,
-  unsigned int             width,
-  unsigned int             height,
-  int                      gmode,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_graphics_header(pappl_device_t *device, int x_origin,
+				 int y_origin, unsigned int width,
+				 unsigned int height, int gmode,
+				 pappl_job_t *job, pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_issue_label()' - Generate XS command (execute print/issue label)
@@ -201,20 +163,11 @@ ssize_t tpcl_cmd_graphics_header(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_issue_label(
-  pappl_device_t           *device,
-  int                      copies,
-  int                      cut_interval,
-  char                     sensor_char,
-  char                     mode_char,
-  char                     speed_char,
-  char                     ribbon_char,
-  char                     rotation,
-  char                     response,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_issue_label(pappl_device_t *device, int copies,
+			     int cut_interval, char sensor_char, char mode_char,
+			     char speed_char, char ribbon_char, char rotation,
+			     char response, pappl_job_t *job,
+			     pappl_printer_t *printer);
 
 /*
  * 'tpcl_cmd_line()' - Generate LC command (draw line/rectangle)
@@ -236,17 +189,8 @@ ssize_t tpcl_cmd_issue_label(
  *   Number of bytes written
  */
 
-ssize_t tpcl_cmd_line(
-  pappl_device_t           *device,
-  int                      x1,
-  int                      y1,
-  int                      x2,
-  int                      y2,
-  int                      type,
-  int                      line_width,
-  pappl_job_t              *job,
-  pappl_printer_t          *printer
-);
-
+ssize_t tpcl_cmd_line(pappl_device_t *device, int x1, int y1, int x2, int y2,
+		      int type, int line_width, pappl_job_t *job,
+		      pappl_printer_t *printer);
 
 #endif // TPCL_COMMANDS_H

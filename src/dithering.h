@@ -20,4 +20,3 @@ void dither_clustered16(pappl_dither_t dither);
 void dither_threshold16(pappl_dither_t dither, unsigned char level);
 
 #endif // #define TPCL_DITHER_H
-

@@ -14,7 +14,6 @@
 
 #include <pappl/pappl.h>
 
-
 /*
  * 'tpcl_state_check_and_update()' - Check if label dimensions changed and update state
  *
@@ -35,15 +34,9 @@
  *   false - Dimensions unchanged from previous state
  */
 
-bool tpcl_state_check_and_update(
-  pappl_printer_t *printer,
-  int             print_width,
-  int             print_height,
-  int             label_gap,
-  int             roll_margin,
-  pappl_job_t     *job
-);
-
+bool tpcl_state_check_and_update(pappl_printer_t *printer, int print_width,
+				 int print_height, int label_gap,
+				 int roll_margin, pappl_job_t *job);
 
 /*
  * 'tpcl_state_delete()' - Delete state file when printer is deleted
@@ -55,9 +48,6 @@ bool tpcl_state_check_and_update(
  *   printer - Printer instance being deleted
  */
 
-void tpcl_state_delete(
-  pappl_printer_t *printer
-);
-
+void tpcl_state_delete(pappl_printer_t *printer);
 
 #endif // TPCL_STATE_H

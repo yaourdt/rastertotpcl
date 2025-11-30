@@ -37,10 +37,10 @@ const pappl_pr_driver_t tpcl_drivers[] = {
   {"B-852R",      "Tec B-852R",            "CMD:TPCL",             NULL},
   {"B-SV4D",      "Tec B-SV4D",            "CMD:TPCL",             NULL},
   {"B-SV4T",      "Tec B-SV4T",            "CMD:TPCL",             NULL},
-  {"B-EV4D-G",    "Tec B-EV4D-G (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
-  {"B-EV4D-T",    "Tec B-EV4D-T (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
-  {"B-EV4T-G",    "Tec B-EV4T-G (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
-  {"B-EV4T-T",    "Tec B-EV4T-T (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL}
+  {"B-EV4D-G",    "Tec B-EV4D (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4D-T",    "Tec B-EV4D (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4T-G",    "Tec B-EV4T (203dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL},
+  {"B-EV4T-T",    "Tec B-EV4T (300dpi)", "CMD:TPCL;MDL:B-EV4-G", NULL}
 };
 
 const int tpcl_drivers_count = sizeof(tpcl_drivers) / sizeof(tpcl_drivers[0]);

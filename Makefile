@@ -82,6 +82,9 @@ ifndef package-build
 	@git checkout -- debian/changelog 2>/dev/null || true
 	@echo "Resetting PAPPL submodule..."
 	@git submodule update --init --force external/pappl
+else
+	@echo "Cleaning PAPPL for package build..."
+	@rm -rf external/pappl
 endif
 	@echo "Clean complete."
 

@@ -38,24 +38,32 @@ This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14** (203dpi v
 
 ## 2. Installation
 
-### 2.1 DEB Package (Debian/Ubuntu)
+### 2.1 APT Repository (Debian/Ubuntu)
 
-DEB packages are available for Debian, Ubuntu, and derivative distributions. The DEB package includes a systemd service that is automatically enabled and started during installation.
+**Installation from repository (recommended):**
 
-**Installation:**
+```bash
+# Add GPG key
+curl -fsSL https://yaourdt.github.io/rastertotpcl/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/tpcl-printer-app.gpg
 
-Download the appropriate DEB package and install it:
+# Add repository
+echo "deb [signed-by=/usr/share/keyrings/tpcl-printer-app.gpg] https://yaourdt.github.io/rastertotpcl stable main" | sudo tee /etc/apt/sources.list.d/tpcl-printer-app.list
+
+# Install
+sudo apt update
+sudo apt install tpcl-printer-app
+```
+
+**Manual installation:**
+
+Download the DEB package from [releases](https://github.com/yaourdt/rastertotpcl/releases) and install:
 
 ```bash
 sudo dpkg -i tpcl-printer-app_*.deb
-sudo apt-get install -f  # Install any missing dependencies
+sudo apt-get install -f
 ```
 
-The service will start automatically after installation. You can verify it is running with:
-
-```bash
-sudo systemctl status tpcl-printer-app
-```
+The service starts automatically. Verify with: `sudo systemctl status tpcl-printer-app`
 
 ### 2.2 RPM Package (RHEL/Fedora/openSUSE)
 

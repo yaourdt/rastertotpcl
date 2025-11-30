@@ -34,7 +34,6 @@ full:
 	@./scripts/generate-version.sh
 	@mkdir -p $(BINDIR)
 	@echo "Rebuilding PAPPL from scratch..."
-	@$(MAKE) -C $(PAPPL_DIR) clean
 	@$(MAKE) pappl-build
 	@$(MAKE) -C $(SRCDIR) all
 

@@ -1,0 +1,36 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: TPCL Printer App
+Label: TPCL Printer App
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: TPCL Printer Application Debian Repository
+Date: Sun, 30 Nov 2025 18:47:45 +0000
+MD5Sum:
+ a7af47d67b1412de89c914fcdf3187d6             1081 main/binary-amd64/Packages
+ 09ddeadaf6a14f17dad4bc041c0807a0              671 main/binary-amd64/Packages.gz
+SHA1:
+ e3fe5e7ffe20aeefd71272eac81d7f239ffd2897             1081 main/binary-amd64/Packages
+ 34e047d866a3c11973a2d444e1b4607d6ddca3e1              671 main/binary-amd64/Packages.gz
+SHA256:
+ 5237cb2ad884c0055a4a6ed601bd3ab5f7f63b0828d1f8b37325d0b1b9d5d4bf             1081 main/binary-amd64/Packages
+ f622976a995f5025e401f54f0bf13c8e23c9aef2f61a183439772fe71f4ee83e              671 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmkskVEACgkQEEgP7huA
+sVOJAw//XjP0sI0lT4wQcyY56jt5PJeDtLpUFFq8rZj1nQODV0Se0mtz09L+sEcm
+yoWLQ8dHu/PryTRDa2r4cXQY/Nphw7Tl1z5Skwk2Slp4Hd85w//waxlr80DEmmcV
+9JABCnoa1t6enn50A8qaNKIrMhOZCiPHRQe2lAmltPu6NiGbbNtQyDUl0UmEWrNH
+9gtnGNqwToHlK2DxGK19Nd44yHDU9gI/NfaXD9NIazGLMs1jzXPGozJnUB3D2gf9
+1xSZgOHMGcRLtWf0TTKHq//tu7ZjVzaYVFE+DP8yGWkvf198Q2ltZgTOBF9X6K0E
+pasCcKVq9EI8vADN7Iuzk0CpMFRmTpaT0qV+EC4v1Xq5W4gPoVAHtPlm5eibVdF2
+HFNajBKNvX2wELiLDEwM6gRirB75hsWOt2mo2JffaO9WnJTZFaJc60Lov16IzNM6
+nXVDbFnoDdKnANYgj20JudSBvs5mq8mV2GpocvHyGt8zOpSeZprPdTVY2gEcGYrX
+1lOqMVRobn6RuoUc5HiAehHqrOMlPEdcUc7cWu6DYOZEoSQ70iSHrY9SF+BCBWMw
++rxNfOXnbnV2uxMb2YuIP4lG+16VPKUhT7miLWeHVttT/5EpZ6RtjusUYPPv9mmv
+c5JzU+j5hBEpgnSpJO2djAFNHjVhFET67hdOX8SdEuFlqrcyVeo=
+=j3p4
+-----END PGP SIGNATURE-----

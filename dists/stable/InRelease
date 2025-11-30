@@ -8,29 +8,29 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: TPCL Printer Application Debian Repository
-Date: Sun, 30 Nov 2025 19:26:44 +0000
+Date: Sun, 30 Nov 2025 20:19:58 +0000
 MD5Sum:
- 16b8c9f68ac1f720f9e53a24fdb98a20             1081 main/binary-amd64/Packages
- b48fa901a51a9922be65b4bc9e313a5b              672 main/binary-amd64/Packages.gz
+ 9586e07d8685d007c60331e4f87d4def             1081 main/binary-amd64/Packages
+ 70d56ae1ed15818c5bb63f34725bc0eb              670 main/binary-amd64/Packages.gz
 SHA1:
- 2d24507da2b40c6c9dddb9469d172ba79b4ee754             1081 main/binary-amd64/Packages
- beef5e53755aca6f447ad1504aabacc5721f789c              672 main/binary-amd64/Packages.gz
+ b4bef3233600e037931788a0c38b7de7d0edd81f             1081 main/binary-amd64/Packages
+ b451a6e598c1b2bc12fb97a3bddfe12384d7386f              670 main/binary-amd64/Packages.gz
 SHA256:
- 7388f906d12183a41e20a663a6604c36c65d1e5eb35fcf925a122d115ee25c23             1081 main/binary-amd64/Packages
- 41caf141bca33f8cd7f29ec43827b1fdc87fe22edd3b3cb864f0199a3d484c13              672 main/binary-amd64/Packages.gz
+ 71e5fdd224ea3ebadd365096b54a21731e343e32e36c8354aa9396f3b5c7fa59             1081 main/binary-amd64/Packages
+ 16e0d47bf38beb9c8cade92403a901395ae5b25636ddba6d8187d3085f8cec84              670 main/binary-amd64/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmksmnQACgkQEEgP7huA
-sVM1GA/+PjjuHre1OzQX1hNXa+RbfSn1PQx26FkabxHfXvU5BfrtT6tHrN5bj/pF
-FAud7s7pd4FKqarTea41inC7FdMcvORK8hBhdBFxhIFk0MQktOuzBtfDKz59r+E1
-JcMdIjVhOtUG8/M5joGwVyJzjn6uGiaiJ0G8IlUG2WCYG/eQ8nTgcjmvsrW67wK8
-ALJ6UH9DjNVARB1hiz4K604cHCS4Z8JXdKbfuMWOoZNpp1G+pV8aG4BZG1+haPL4
-ZaHPqORxoCkWzznxF8SlPzK+uDgOp9amvX6pK+U4CMqMpJpmijUtK9m8vVJui81X
-qQ+6o7c2E/heJI4TdZUYp6Qsl9JY4n6B95vmqJIyra1mtWJjUOLU97Hu8itnKCGp
-6HRNd7grr70nBXGV/4YxCCLQICs1DWiIc1kVHvAZ5SLy9ufKm7i0YaTg62EQ2CVe
-P4zjd+IBepsIyQfSVlvoqs9MZhkVVcSUTO/QCjMbudyzF8nfICRmeFKp55WCCh49
-vfBzrwILOeo+vkR6+poxCxgoq7870haBx9bIu+QEFgnZyPg15mZR81f8sGnjoiGE
-Agnq/+ffBjwAgUxj3QMG/1/KoaiyUyDO43hZPB1AMAEBzQQL2jCJkLUMwy2ZsPMn
-XXHq1l/5qJVNCC2LLyrL+VxdZuULIZfSm4qu9Sw8lQdDjVKlAfo=
-=swI7
+iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmkspu4ACgkQEEgP7huA
+sVO8fg/+JKXU8xP5VqoFPLMscDkYbkSDO/mHHxD0VOGjTHKGAnnpC6IJMFN/vtWF
+MqyKDATlvgzCy5MNLwRxLQBWDLCeMA2aEyXXbYl2pwr5ae28poGwtCNjkaX415aE
+UQcyycJRcsi2iSleYSbLAIXVifuq4ckYUDtctRDT6HRdmKNwe0wNTP0dBVt1DWCd
+HuYuG+n+/6lH14InZ6wKzB5FuJd9URKz8+PupEfrrQU5Cr6U9NTrwdS29H9sK13h
+D0blu7GJyitA71seBapa0ntg1/E5XP36c2dHNK/8wSDnE0n/G6ZZtFh7YogWLl31
+b4qdOYtgGPCRejoYGXzimlWQHTZUdt4zxXa6F4ZlX5nC3RO2efqMnqDBc2Z0Kayn
+JmElhmWexLdO77dwgM/RxMF0UOx52Xsl7rmtnxDJV0po7qLE3K4s8Ji9dIlBRT7F
+gWQy3XDFDDgsWLNmSYUX+Diy8sOPvDD2BMKOAB2pM6pnYIUTkhUl59Hy2LDPj6Ep
+Ru7v6SYjpjb3kzj5YhXM/s+JEZ7dD2Gvn2bK8HMZbA/YgcPl3MSM5VcEwk3sCKEO
+7nT0WSlWwaRV59CZ2LH2nDxZgWlRUYiwR6XBYXjNl5ZwA3fUbPJ1rO3SBGg4zrCk
+5h/DEKawMAI74WfACdzDw9i0GVIYN4P80W1HxiXX2JlSzYX1Tqs=
+=q+hR
 -----END PGP SIGNATURE-----

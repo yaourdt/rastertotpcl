@@ -190,7 +190,8 @@ jobs:
       - name: Collect RPM artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/dist
-          find ~/rpmbuild/RPMS -name "*.rpm" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
+          # Copy only main RPM package, exclude debug packages
+          find ~/rpmbuild/RPMS -name "*.rpm" ! -name "*-debuginfo-*.rpm" ! -name "*-debugsource-*.rpm" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
           cp ~/rpmbuild/RPM-GPG-KEY-tpcl-printer-app $GITHUB_WORKSPACE/dist/
           ls -lh $GITHUB_WORKSPACE/dist/
 
@@ -250,7 +251,8 @@ jobs:
       - name: Collect DEB artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/dist
-          find .. -maxdepth 1 -name "*.deb" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
+          # Copy only main DEB package, exclude debug symbol packages
+          find .. -maxdepth 1 -name "*.deb" ! -name "*-dbgsym_*.deb" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
           ls -lh $GITHUB_WORKSPACE/dist/
 
       - name: Upload DEB artifact (workflow)

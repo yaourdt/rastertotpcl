@@ -175,6 +175,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure git safe directory
+        run: |
+          git config --global --add safe.directory '*'
+
       - name: Show tool versions
         run: |
           uname -a || true

@@ -199,7 +199,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rpm-package
-          path: dist/*.rpm
+          path: |
+            dist/*.rpm
+            dist/RPM-GPG-KEY-*
 
   build-deb:
     name: Build DEB package

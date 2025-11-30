@@ -18,6 +18,8 @@ jobs:
         include:
           - os: ubuntu-latest
             os_name: linux
+          - os: macos-latest
+            os_name: macos
 
     steps:
       - name: Checkout (with submodules)
@@ -35,10 +37,26 @@ jobs:
             libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
             imagemagick
 
+      - name: Install macOS dependencies (both architectures)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Install dependencies for both arm64 (native) and x86_64 architectures
+          brew install cups libjpeg libpng zlib openssl libusb imagemagick
+
+          # Also fetch x86_64 versions for universal binary support
+          # Homebrew on Apple Silicon can install both architectures
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+
+          # Check if x86_64 Homebrew exists, if not use Rosetta for dependencies
+          if [ -f /usr/local/bin/brew ]; then
+            echo "Installing x86_64 dependencies via Rosetta Homebrew..."
+            arch -x86_64 /usr/local/bin/brew install cups libjpeg libpng zlib openssl libusb imagemagick || true
+          fi
+
       - name: Show tool versions
         run: |
           uname -a || true
-          gcc --version || true
+          gcc --version || clang --version || true
           pkg-config --version || true
           convert --version | head -n 1 || true
 
@@ -50,7 +68,12 @@ jobs:
         id: name
         shell: bash
         run: |
-          ARCH="$(uname -m)"
+          # For macOS universal binaries, use 'universal' instead of single arch
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            ARCH="universal"
+          else
+            ARCH="$(uname -m)"
+          fi
           # strip leading 'v' in tag for filename niceness
           VERSION="${GITHUB_REF_NAME#v}"
           NAME="rastertotpcl-${VERSION}-${{ matrix.os_name }}-${ARCH}"

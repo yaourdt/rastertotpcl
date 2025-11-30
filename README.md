@@ -42,14 +42,18 @@ This driver has been tested primarily on a **Toshiba TEC B-EV4D-GS14** (203dpi v
 
 **Installation from repository (recommended):**
 
+Add GPG key
 ```bash
-# Add GPG key
 curl -fsSL https://yaourdt.github.io/rastertotpcl/KEY.gpg | sudo gpg --dearmor -o /usr/share/keyrings/tpcl-printer-app.gpg
+```
 
-# Add repository
+Add repository
+```bash
 echo "deb [signed-by=/usr/share/keyrings/tpcl-printer-app.gpg] https://yaourdt.github.io/rastertotpcl stable main" | sudo tee /etc/apt/sources.list.d/tpcl-printer-app.list
+```
 
-# Install
+Install
+```bash
 sudo apt update
 sudo apt install tpcl-printer-app
 ```
@@ -73,11 +77,13 @@ RPM packages are available for RPM-based Linux distributions. The RPM package in
 
 Download the RPM package and GPG key from [releases](https://github.com/yaourdt/rastertotpcl/releases), then install:
 
+Import GPG key
 ```bash
-# Import GPG key
 sudo rpm --import RPM-GPG-KEY-tpcl-printer-app
+```
 
-# Install package
+Install package
+```bash
 sudo rpm -i tpcl-printer-app-*.rpm
 ```
 
@@ -95,18 +101,11 @@ Download the PKG package and install it:
 sudo installer -pkg tpcl-printer-app-*.pkg -target /
 ```
 
-The service will start automatically after installation. Verify it is running with:
-
-```bash
-sudo launchctl list | grep tpcl-printer-app
-```
+The service will start automatically after installation. Verify with: `sudo launchctl list | grep tpcl-printer-app`
 
 **Uninstallation:**
 
-```bash
-curl -O https://raw.githubusercontent.com/yaourdt/rastertotpcl/main/scripts/uninstall-macos.sh
-sudo bash uninstall-macos.sh
-```
+
 
 ### 2.4 Manual Installation from Source
 
@@ -114,7 +113,14 @@ See [Building from Source](#7-building-from-source)
 
 ### 2.5 Uninstallation
 
-Use your distros package manager or, for manual installations, `sudo make uninstall`. Configuration in `/var/lib/` and `/var/spool/` is preserved on uninstallation.
+Use your distros package manager or, for manual installations, `sudo make uninstall`. For MacOS use:
+
+```bash
+curl -O https://raw.githubusercontent.com/yaourdt/rastertotpcl/main/scripts/uninstall-macos.sh
+sudo bash uninstall-macos.sh
+```
+
+Configuration in `/var/lib/` and `/var/spool/` is preserved on uninstallation.
 
 ## 3. Usage Guide
 
@@ -156,12 +162,12 @@ Once the server is running, access the web interface at:
 ```
 http://localhost:8000
 ```
-**Note:** When adding a network printer, explicitly state the port (Toshiba default: 8000) as <ip>:<port> in the webinterface for the printer to be found. Alternatively, you may change the listening port on the printer to 9100 (PAPPL default) using the Toshiba settings tool.
+**Note:** When adding a network printer, explicitly state the port (Toshiba default: 8000) as `<ip>:<port>` in the webinterface for the printer to be found. Alternatively, you may change the listening port on the printer to 9100 (PAPPL default) using the Toshiba settings tool.
 
 
 ### 3.3 Printer Identification Feature
 
-The "Identify Printer" function in the web interface will feed a single blank label to help you identify which physical printer corresponds to the application. 
+The "Identify Printer" function in the web interface will feed a single blank label. 
 
 ### 3.4 Printing Test Pages
 
@@ -185,11 +191,11 @@ Width difference between backing paper and label in 0.1mm units.
 
 #### Sensor Type
 Method for detecting labels:
-- **None**: Continuous media without gaps
+- **None**: Do not use sensor
 - **Reflective**: Uses reflective sensor (black mark detection)
 - **Transmissive** (default): Uses transmissive sensor (gap detection)
-- **Reflective Pre-Print**: Reflective sensor with pre-printed marks
-- **Transmissive Pre-Print**: Transmissive sensor with pre-printed marks
+- **Reflective Pre-Print**: Reflective sensor (gap before the label)
+- **Transmissive Pre-Print**: Transmissive sensor (gap before the label)
 
 ### 4.2 Label Processing Options
 
@@ -214,7 +220,7 @@ Label feeding behavior if peel off device is installed:
 Whether to feed a label when the label size changes.
 - **Yes** (default): Feed label on size change
 - **No**: Do not feed on size change
-- Note: Should be enabled for most printers to avoid command errors
+Should be enabled for most printers to avoid command errors
 
 ### 4.3 Fine-Tuning Adjustments
 
@@ -222,22 +228,19 @@ Whether to feed a label when the label size changes.
 Fine-tune label feed position in 0.1mm units.
 - Range: -500 to 500
 - Default: 0
-- Negative values: move forward
-- Positive values: move backward
+Negative values move forward, positive values move backward.
 
 #### Cut Position Adjustment
 Fine-tune cut position if cutter is installed, in 0.1mm units.
 - Range: -180 to 180
 - Default: 0
-- Negative values: move forward
-- Positive values: move backward
+Negative values move forward, positive values move backward.
 
 #### Backfeed Adjustment
 Fine-tune backfeed amount in 0.1mm units.
 - Range: -99 to 99
 - Default: 0
-- Negative values: decrease backfeed
-- Positive values: increase backfeed
+Negative values decrease backfeed, positive values increase backfeed.
 
 #### Print Speed
 Printing speed in arbitrary units (varies by model).
@@ -248,21 +251,20 @@ Printing speed in arbitrary units (varies by model).
 Darkness adjustment for print density.
 - Range: -10 to 10
 - Default: 0
-- Negative values: lighter
-- Positive values: darker
+Negative values create lighter imprints, positive values darker imprints.
 
 ### 4.4 Advanced Graphics Settings
 
 #### Data Transmission Mode
 How graphics data is sent to the printer:
-- **Nibble AND**: Nibble mode with AND logic
-- **Hex AND**: Hex mode with AND logic
-- **TOPIX** (default, recommended): Compressed format for best performance
-- **Nibble OR**: Nibble mode with OR logic
-- **Hex OR**: Hex mode with OR logic
+- **Nibble AND**: Nibble mode with AND logic (overwrites image)
+- **Hex AND**: Hex mode with AND logic (overwrites image)
+- **TOPIX** (default, recommended): Compressed format for best performance  (overwrites image)
+- **Nibble OR**: Nibble mode with OR logic (ORs previous content of image buffer)
+- **Hex OR**: Hex mode with OR logic (ORs previous content of image buffer)
 
 #### Dithering Algorithm
-Algorithm for converting grayscale images to black and white:
+Algorithm for converting grayscale content to black and white:
 - **Threshold** (default): Simple threshold-based conversion
 - **Bayer**: Bayer matrix dithering
 - **Clustered**: Clustered dot dithering
@@ -277,8 +279,7 @@ Separate dithering algorithm for photographic content:
 Threshold level when using threshold algorithm.
 - Range: 0-255
 - Default: 128
-- Lower values: more black
-- Higher values: more white
+Lower values create more black, higher values create less black.
 
 ## 5. Troubleshooting and Debugging
 
@@ -316,10 +317,9 @@ sudo journalctl -u tpcl-printer-app -f
 You can send TPCL commands directly to the printer for testing or advanced operations. See the `/tests` directory for examples of direct command scripts.
 
 This is useful for:
-- Testing specific TPCL commands
-- Debugging printer communication issues
-- Implementing custom printer operations not available in the web interface
 - Printing of large batches of labels from specialized software
+- Implementing custom printer operations not available in the web interface
+- Testing specific TPCL commands
 
 ## 6. File Locations Reference
 
@@ -328,11 +328,11 @@ This is useful for:
 **Manual installation:**
 - `/usr/local/bin/tpcl-printer-app`
 
-**RPM package:**
+**RPM and DEB packages:**
 - `/usr/bin/tpcl-printer-app`
 
-**DEB package:**
-- `/usr/bin/tpcl-printer-app`
+**PKG package:**
+- `/usr/local/bin/tpcl-printer-app`
 
 ### 6.2 Configuration Files
 
@@ -413,10 +413,9 @@ Running `make help` will show all available options and build flags.
 
 ### 7.3 Build System Notes
 
-- **Build System Architecture**: The build system has clean separation between local development and package builds:
+- **Build System Architecture**: The build system has a separation of concerns between local development and package builds:
   - **Local builds** (Makefile): Uses git submodules, always builds PAPPL statically from source, version script generates only `src/version.h`
   - **Package builds** (debian/rules, .spec): Independent build logic, downloads PAPPL release tarball, version script updates package files
-  - This separation ensures no git operations in package builds and prevents accidental modification of package files during development
 
 - **SINGLE_ARCH Flag**: On macOS, use `SINGLE_ARCH=1` to force single-architecture builds and avoid multi-architecture linking errors with PAPPL
 
@@ -445,12 +444,12 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 
 You should have received a copy of the GNU General Public License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-For certain builds, this binary comes prepacked with PAPPL, which is licensed under the Apache 2.0 license.
+For reasons mentioned above, this binary comes prepacked with PAPPL, which is licensed under the Apache 2.0 license.
 
 ### 8.3 Credits and Authors
 
-- **rastertotpcl** is based on the **rastertotec** driver written by Patrick Kong (SKE s.a.r.l)
-- **rastertotec** is based on the **rastertolabel** driver included with the CUPS printing system by Easy Software Products
-- Packaging of rastertotpcl and TOPIX compression was added by Sam Lown (www.samlown.com)
+- `rastertotpcl` is based on the `rastertotec` driver written by Patrick Kong (SKE s.a.r.l)
+- `rastertotec` is based on the `rastertolabel` driver included with the CUPS printing system by Easy Software Products
+- Packaging of `rastertotpcl` and TOPIX compression was added by Sam Lown (www.samlown.com)
 - Original MacOS adaptation by [Milverton](https://milverton.typepad.com/the-hairy-mouse/2011/10/print-to-toshiba-tec-b-ev4d-gs14-on-os-x.html)
 - PAPPL migration, direct printing and current maintenance by Mark Dornbach (yaourdt)

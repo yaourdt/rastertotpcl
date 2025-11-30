@@ -103,10 +103,6 @@ sudo installer -pkg tpcl-printer-app-*.pkg -target /
 
 The service will start automatically after installation. Verify with: `sudo launchctl list | grep tpcl-printer-app`
 
-**Uninstallation:**
-
-
-
 ### 2.4 Manual Installation from Source
 
 See [Building from Source](#7-building-from-source)

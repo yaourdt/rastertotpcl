@@ -115,8 +115,8 @@ jobs:
           # Set GIT_COMMIT for version generation
           export GIT_COMMIT="${VERSION}"
 
-          # Generate version in spec file
-          ./scripts/generate-version.sh
+          # Generate version and update spec file
+          ./scripts/generate-version.sh --update-packages
 
           # Copy spec file
           cp tpcl-printer-app.spec ~/rpmbuild/SPECS/
@@ -198,8 +198,8 @@ jobs:
           # Set GIT_COMMIT for version generation
           export GIT_COMMIT="${VERSION}"
 
-          # Generate version in changelog
-          ./scripts/generate-version.sh
+          # Generate version and update package files
+          ./scripts/generate-version.sh --update-packages
 
           # Build the source package
           dpkg-buildpackage -us -uc -b

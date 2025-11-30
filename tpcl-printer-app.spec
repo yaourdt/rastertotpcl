@@ -55,16 +55,20 @@ mv pappl-%{pappl_version} external/pappl
 
 %build
 export GIT_COMMIT=%{version}
-# Build PAPPL first
+# Configure and build PAPPL
 cd external/pappl
 ./configure --prefix=%{_prefix}
-cd ../..
-./scripts/patch-translations.sh
-cd external/pappl
 %make_build
 cd ../..
-# Build tpcl-printer-app with package-build flag
-%make_build package-build=1
+# Apply PAPPL translations patch
+./scripts/patch-translations.sh
+# Generate icon headers
+./scripts/generate-icon-headers.sh
+# Generate version header and update package files
+./scripts/generate-version.sh --update-packages
+# Build tpcl-printer-app
+mkdir -p bin
+%make_build -C src
 
 %install
 install -Dm0755 bin/tpcl-printer-app \

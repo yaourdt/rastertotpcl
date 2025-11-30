@@ -10,37 +10,42 @@ export PREFIX = /usr
 	dh $@
 
 override_dh_auto_clean:
-	# Clean build artifacts (skip git operations during package builds)
-	export MAKEFLAGS="package-build=1 $$MAKEFLAGS"; \
-	[ ! -f Makefile ] || $(MAKE) clean; \
-	[ ! -d external/pappl ] || $(MAKE) -C external/pappl clean || true; \
-	dh_auto_clean
+	# Clean application build artifacts
+	[ ! -d src ] || $(MAKE) -C src clean
+	rm -rf bin
+	rm -f src/icon-*.h src/version.h
+	# Clean PAPPL
+	[ ! -d external/pappl ] || $(MAKE) -C external/pappl clean || true
+	rm -rf external/pappl
 
 override_dh_auto_configure:
-	# Download and extract PAPPL if not already present
-	if [ ! -d external/pappl/pappl ]; then \
-		mkdir -p external; \
-		if command -v wget >/dev/null 2>&1; then \
-			wget -O /tmp/pappl-$(PAPPL_VERSION).tar.gz \
-				https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
-		else \
-			curl -L -o /tmp/pappl-$(PAPPL_VERSION).tar.gz \
-				https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
-		fi; \
-		tar -xzf /tmp/pappl-$(PAPPL_VERSION).tar.gz -C external/; \
-		mv external/pappl-$(PAPPL_VERSION) external/pappl; \
-		rm -f /tmp/pappl-$(PAPPL_VERSION).tar.gz; \
+	# Download and extract PAPPL
+	mkdir -p external
+	if command -v wget >/dev/null 2>&1; then \
+		wget -O /tmp/pappl-$(PAPPL_VERSION).tar.gz \
+			https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
+	else \
+		curl -L -o /tmp/pappl-$(PAPPL_VERSION).tar.gz \
+			https://github.com/michaelrsweet/pappl/releases/download/v$(PAPPL_VERSION)/pappl-$(PAPPL_VERSION).tar.gz; \
 	fi
+	tar -xzf /tmp/pappl-$(PAPPL_VERSION).tar.gz -C external/
+	mv external/pappl-$(PAPPL_VERSION) external/pappl
+	rm -f /tmp/pappl-$(PAPPL_VERSION).tar.gz
 	# Configure PAPPL
 	cd external/pappl && ./configure --prefix=$(PREFIX)
 
 override_dh_auto_build:
 	# Apply PAPPL translations patch
 	./scripts/patch-translations.sh
-	# Build PAPPL first
+	# Build PAPPL
 	$(MAKE) -C external/pappl
-	# Build tpcl-printer-app with package-build flag
-	$(MAKE) package-build=1
+	# Generate icon headers
+	./scripts/generate-icon-headers.sh
+	# Generate version header and update package files
+	./scripts/generate-version.sh --update-packages
+	# Build tpcl-printer-app
+	mkdir -p bin
+	$(MAKE) -C src
 
 override_dh_auto_install:
 	# Install binary

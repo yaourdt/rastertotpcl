@@ -1,6 +1,7 @@
-# Makefile for TPCL Printer Application
+# Makefile for TPCL Printer Application Source
 #
-# This file is not meant to run standalone. Use Makefile in project root.
+# Can be called standalone (e.g., from package builds) or via parent Makefile.
+# Requires PAPPL to be already built in ../external/pappl.
 
 # Directories
 PAPPL_DIR = ../external/pappl
@@ -18,7 +19,12 @@ LIBS = $(PAPPL_LIB) -lcups -lpthread -lm
 
 # Get additional flags from PAPPL's build
 # Extract LIBS from PAPPL's Makedefs (excluding PAPPL itself and CUPS which we already link)
-PAPPL_LIBS = $(shell grep '^LIBS[[:space:]]*=' $(PAPPL_DIR)/Makedefs | sed 's/^LIBS[[:space:]]*=[[:space:]]*//' | sed 's/-lcups//' | sed 's/-lpthread//' | sed 's/-lm//')
+# Note: Makedefs is created by PAPPL's configure; if missing, PAPPL needs to be built first
+PAPPL_LIBS = $(shell if [ -f "$(PAPPL_DIR)/Makedefs" ]; then \
+	grep '^LIBS[[:space:]]*=' $(PAPPL_DIR)/Makedefs | \
+	sed 's/^LIBS[[:space:]]*=[[:space:]]*//' | \
+	sed 's/-lcups//' | sed 's/-lpthread//' | sed 's/-lm//'; \
+	fi)
 
 # Target executable
 TARGET = tpcl-printer-app
@@ -31,9 +37,19 @@ OBJECTS = $(SOURCES:.c=.o)
 # Headers
 HEADERS := $(wildcard *.h)
 
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall check-pappl
 
-all: $(TARGET_PATH)
+all: check-pappl $(TARGET_PATH)
+
+check-pappl:
+	@if [ ! -f "$(PAPPL_LIB)" ]; then \
+		echo "ERROR: PAPPL library not found at $(PAPPL_LIB)"; \
+		echo "PAPPL must be built before building tpcl-printer-app."; \
+		echo ""; \
+		echo "For local builds: Run 'make' from the project root"; \
+		echo "For package builds: Ensure PAPPL is built first"; \
+		exit 1; \
+	fi
 
 $(TARGET_PATH): $(OBJECTS)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS) $(PAPPL_LIBS)

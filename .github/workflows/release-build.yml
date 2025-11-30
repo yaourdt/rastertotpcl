@@ -61,6 +61,10 @@ jobs:
       - name: Build macOS package
         if: matrix.os == 'macos-latest'
         run: |
+          # Strip leading 'v' in tag for version
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Set GIT_COMMIT to override git state detection
+          export GIT_COMMIT="${VERSION}"
           ./scripts/build-macos-pkg.sh
 
       - name: Determine archive name

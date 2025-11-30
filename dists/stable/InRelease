@@ -8,29 +8,29 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: TPCL Printer Application Debian Repository
-Date: Sun, 30 Nov 2025 18:53:02 +0000
+Date: Sun, 30 Nov 2025 19:26:44 +0000
 MD5Sum:
- a7af47d67b1412de89c914fcdf3187d6             1081 main/binary-amd64/Packages
- 719777cd92122e6db2d11955e42c73b7              671 main/binary-amd64/Packages.gz
+ 16b8c9f68ac1f720f9e53a24fdb98a20             1081 main/binary-amd64/Packages
+ b48fa901a51a9922be65b4bc9e313a5b              672 main/binary-amd64/Packages.gz
 SHA1:
- e3fe5e7ffe20aeefd71272eac81d7f239ffd2897             1081 main/binary-amd64/Packages
- 889a9f67c342858c1f79e9a4f7d1737cbd76953a              671 main/binary-amd64/Packages.gz
+ 2d24507da2b40c6c9dddb9469d172ba79b4ee754             1081 main/binary-amd64/Packages
+ beef5e53755aca6f447ad1504aabacc5721f789c              672 main/binary-amd64/Packages.gz
 SHA256:
- 5237cb2ad884c0055a4a6ed601bd3ab5f7f63b0828d1f8b37325d0b1b9d5d4bf             1081 main/binary-amd64/Packages
- e28ad8e64054e007b6d8534d89865e3caebaaac70fcef04444da7832c094792a              671 main/binary-amd64/Packages.gz
+ 7388f906d12183a41e20a663a6604c36c65d1e5eb35fcf925a122d115ee25c23             1081 main/binary-amd64/Packages
+ 41caf141bca33f8cd7f29ec43827b1fdc87fe22edd3b3cb864f0199a3d484c13              672 main/binary-amd64/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmksko4ACgkQEEgP7huA
-sVOOKg/+O+5WmqmFX4ygnK/cdMmYviDPvI0PDGiuU7xjtLDEe+L6Ibde+aDGASGW
-j5J0s2lvi1jZO0C3xPTo8mJParyuk+s4EzOC3QkiFPfpGyjH9SfWTcIq3Eq6Uafj
-DKwQaOEzWuPRJGprq74HwVsr/Y0WTpoe9Fn0EI25WJUPX1JCKlE6nJsgpjRYaB4q
-03RorAWXN+fFi059/EpHXhsyZ71bv7vuCgUmujTwxMNI4qief5VoVIxuPJFilfjL
-dDHYRKvCnArq+Hz8uYACemFpAzdySmJe4tY09M/AUSXPiz8EIrLiQlan9kL/DjpZ
-DF5HYnCDdrCr3wuuSqMbg5hzWXZbxgpfLpVBwgB4aLnXoei3eNdhGzsEDmCTEOHP
-fj7R9bO+2EXZ6t6rf/3fRYwYbg8L1pJf4xK8okqCW+q0NyBRs9lHXQT44do+RECA
-nACSYPx6e5ngU64Ylo0cGANqr6cVi8lYnZp0DFrUf96PIXR8sXfwvcN0fBzqCvAe
-DnhhkB0qPurAbZP2bEk9FIYK+GwD9RPteWjFdsxcMiFF7/sVkYhqckHzvzhcyTit
-+4V9VTQ+jhcvJYAkAdbUUb4tqhCh1lg4DQCPPxJuHesY6BmrwWH+9zkfRsoACTaA
-kKtR5A7pJSAddLJSiFXVLVlGoZ7GjL9zXipQTsp5FZ0xRngcshk=
-=kQ1K
+iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmksmnQACgkQEEgP7huA
+sVM1GA/+PjjuHre1OzQX1hNXa+RbfSn1PQx26FkabxHfXvU5BfrtT6tHrN5bj/pF
+FAud7s7pd4FKqarTea41inC7FdMcvORK8hBhdBFxhIFk0MQktOuzBtfDKz59r+E1
+JcMdIjVhOtUG8/M5joGwVyJzjn6uGiaiJ0G8IlUG2WCYG/eQ8nTgcjmvsrW67wK8
+ALJ6UH9DjNVARB1hiz4K604cHCS4Z8JXdKbfuMWOoZNpp1G+pV8aG4BZG1+haPL4
+ZaHPqORxoCkWzznxF8SlPzK+uDgOp9amvX6pK+U4CMqMpJpmijUtK9m8vVJui81X
+qQ+6o7c2E/heJI4TdZUYp6Qsl9JY4n6B95vmqJIyra1mtWJjUOLU97Hu8itnKCGp
+6HRNd7grr70nBXGV/4YxCCLQICs1DWiIc1kVHvAZ5SLy9ufKm7i0YaTg62EQ2CVe
+P4zjd+IBepsIyQfSVlvoqs9MZhkVVcSUTO/QCjMbudyzF8nfICRmeFKp55WCCh49
+vfBzrwILOeo+vkR6+poxCxgoq7870haBx9bIu+QEFgnZyPg15mZR81f8sGnjoiGE
+Agnq/+ffBjwAgUxj3QMG/1/KoaiyUyDO43hZPB1AMAEBzQQL2jCJkLUMwy2ZsPMn
+XXHq1l/5qJVNCC2LLyrL+VxdZuULIZfSm4qu9Sw8lQdDjVKlAfo=
+=swI7
 -----END PGP SIGNATURE-----

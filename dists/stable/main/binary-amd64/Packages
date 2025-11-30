@@ -5,10 +5,10 @@ Maintainer: Mark Dornbach <mark@dornbach.io>
 Installed-Size: 985
 Depends: libavahi-client3 (>= 0.6.16), libavahi-common3 (>= 0.6.16), libc6 (>= 2.38), libcups2t64 (>= 2.3~b6), libjpeg62-turbo (>= 1.3.1), libpam0g (>= 0.99.7.1), libpng16-16t64 (>= 1.6.46), libssl3t64 (>= 3.0.0), libusb-1.0-0 (>= 2:1.0.16), libcups2, systemd
 Filename: pool/main/t/tpcl-printer-app/tpcl-printer-app_0.2.3-1_amd64.deb
-Size: 272596
-MD5sum: 8efce58fcea2e616cd3e8ba9471adc92
-SHA1: 44a8f6c252f0b37090f0db14bfb3c4af0eeb69ba
-SHA256: 0cd2e074b170140ff154eefe0df7c43d9128805465271d8066a5fcb310b64e50
+Size: 272776
+MD5sum: dfbcdaa5d3eb25bd9b5b7af72cde8561
+SHA1: 45e63ca64aecd40098935136913407707911b44a
+SHA256: 13a21fab460dda118418672d261f0db31d53dc91d5e5153913bff9941239c89b
 Section: net
 Priority: optional
 Homepage: https://github.com/yaourdt/rastertotpcl

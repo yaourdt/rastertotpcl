@@ -10,10 +10,10 @@ export PREFIX = /usr
 	dh $@
 
 override_dh_auto_clean:
-	# Clean build artifacts
-	[ ! -f Makefile ] || $(MAKE) clean
-	# Clean PAPPL if it exists
-	[ ! -d external/pappl ] || $(MAKE) -C external/pappl clean || true
+	# Clean build artifacts (skip git operations during package builds)
+	export MAKEFLAGS="package-build=1 $$MAKEFLAGS"; \
+	[ ! -f Makefile ] || $(MAKE) clean; \
+	[ ! -d external/pappl ] || $(MAKE) -C external/pappl clean || true; \
 	dh_auto_clean
 
 override_dh_auto_configure:

@@ -75,12 +75,14 @@ clean:
 	@rm -f ../*.deb ../*.buildinfo ../*.changes 2>/dev/null || true
 	@rm -rf debian/.debhelper/ debian/tpcl-printer-app/ 2>/dev/null || true
 	@rm -f debian/files debian/*.substvars debian/*.log debian/debhelper-build-stamp 2>/dev/null || true
+ifndef package-build
 	@echo "Resetting RPM spec file..."
 	@git checkout -- tpcl-printer-app.spec 2>/dev/null || true
 	@echo "Resetting Debian changelog..."
 	@git checkout -- debian/changelog 2>/dev/null || true
 	@echo "Resetting PAPPL submodule..."
 	@git submodule update --init --force external/pappl
+endif
 	@echo "Clean complete."
 
 # Install the application to system directories

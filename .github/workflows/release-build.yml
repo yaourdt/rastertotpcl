@@ -47,7 +47,7 @@ jobs:
           uname -a || true
           gcc --version || clang --version || true
           pkg-config --version || true
-          convert --version | head -n 1 || true
+          magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
 
       - name: Build (full)
         run: |
@@ -116,7 +116,7 @@ jobs:
           uname -a || true
           gcc --version || true
           pkg-config --version || true
-          convert --version | head -n 1 || true
+          magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
           rpm --version || true
 
       - name: Setup RPM build tree
@@ -226,7 +226,7 @@ jobs:
           uname -a || true
           gcc --version || true
           pkg-config --version || true
-          convert --version | head -n 1 || true
+          magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
           dpkg --version || true
 
       - name: Determine version

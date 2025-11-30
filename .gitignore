@@ -1,6 +1,7 @@
 *.swp
 *.o
 /bin
+/dist
 /src/icon-*.h
 /src/version.h
 

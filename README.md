@@ -77,11 +77,36 @@ The service will start automatically after installation. You can verify it is ru
 sudo systemctl status tpcl-printer-app
 ```
 
-### 2.3 Manual Installation from Source
+### 2.3 PKG Package (macOS)
+
+PKG packages are available for macOS (arm64). The PKG package includes a LaunchDaemon that is automatically enabled and started during installation.
+
+**Installation:**
+
+Download the PKG package and install it:
+
+```bash
+sudo installer -pkg tpcl-printer-app-*.pkg -target /
+```
+
+The service will start automatically after installation. Verify it is running with:
+
+```bash
+sudo launchctl list | grep tpcl-printer-app
+```
+
+**Uninstallation:**
+
+```bash
+curl -O https://raw.githubusercontent.com/yaourdt/rastertotpcl/main/scripts/uninstall-macos.sh
+sudo bash uninstall-macos.sh
+```
+
+### 2.4 Manual Installation from Source
 
 See [Building from Source](#7-building-from-source)
 
-### 2.4 Uninstallation
+### 2.5 Uninstallation
 
 Use your distros package manager or, for manual installations, `sudo make uninstall`. Configuration in `/var/lib/` and `/var/spool/` is preserved on uninstallation.
 

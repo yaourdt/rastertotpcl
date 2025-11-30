@@ -58,6 +58,11 @@ jobs:
             make full
           fi
 
+      - name: Build macOS package
+        if: matrix.os == 'macos-latest'
+        run: |
+          ./scripts/build-macos-pkg.sh
+
       - name: Determine archive name
         id: name
         shell: bash
@@ -80,7 +85,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.name.outputs.name }}
-          path: dist/${{ steps.name.outputs.name }}.tar.gz
+          path: |
+            dist/${{ steps.name.outputs.name }}.tar.gz
+            dist/*.pkg
 
   build-rpm:
     name: Build RPM package
@@ -251,3 +258,4 @@ jobs:
             dist/**/*.tar.gz
             dist/**/*.rpm
             dist/**/*.deb
+            dist/**/*.pkg

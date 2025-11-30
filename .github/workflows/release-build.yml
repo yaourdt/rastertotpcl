@@ -37,21 +37,10 @@ jobs:
             libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
             imagemagick
 
-      - name: Install macOS dependencies (both architectures)
+      - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          # Install dependencies for both arm64 (native) and x86_64 architectures
           brew install cups libjpeg libpng zlib openssl libusb imagemagick
-
-          # Also fetch x86_64 versions for universal binary support
-          # Homebrew on Apple Silicon can install both architectures
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
-
-          # Check if x86_64 Homebrew exists, if not use Rosetta for dependencies
-          if [ -f /usr/local/bin/brew ]; then
-            echo "Installing x86_64 dependencies via Rosetta Homebrew..."
-            arch -x86_64 /usr/local/bin/brew install cups libjpeg libpng zlib openssl libusb imagemagick || true
-          fi
 
       - name: Show tool versions
         run: |
@@ -62,18 +51,18 @@ jobs:
 
       - name: Build (full)
         run: |
-          make full
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            # Build for arm64 only (native architecture for GitHub's macOS runners)
+            make full SINGLE_ARCH=1
+          else
+            make full
+          fi
 
       - name: Determine archive name
         id: name
         shell: bash
         run: |
-          # For macOS universal binaries, use 'universal' instead of single arch
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            ARCH="universal"
-          else
-            ARCH="$(uname -m)"
-          fi
+          ARCH="$(uname -m)"
           # strip leading 'v' in tag for filename niceness
           VERSION="${GITHUB_REF_NAME#v}"
           NAME="rastertotpcl-${VERSION}-${{ matrix.os_name }}-${ARCH}"

@@ -67,23 +67,21 @@ The service starts automatically. Verify with: `sudo systemctl status tpcl-print
 
 ### 2.2 RPM Package (RHEL/Fedora/openSUSE)
 
-**Note:** RPM packages are currently unsigned.
-
 RPM packages are available for RPM-based Linux distributions. The RPM package includes a systemd service that is automatically enabled and started during installation.
 
 **Installation:**
 
-Download the appropriate RPM package and install it:
+Download the RPM package and GPG key from [releases](https://github.com/yaourdt/rastertotpcl/releases), then install:
 
 ```bash
+# Import GPG key
+sudo rpm --import RPM-GPG-KEY-tpcl-printer-app
+
+# Install package
 sudo rpm -i tpcl-printer-app-*.rpm
 ```
 
-The service will start automatically after installation. You can verify it is running with:
-
-```bash
-sudo systemctl status tpcl-printer-app
-```
+The service starts automatically. Verify with: `sudo systemctl status tpcl-printer-app`
 
 ### 2.3 PKG Package (macOS)
 

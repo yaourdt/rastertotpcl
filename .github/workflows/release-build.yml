@@ -168,10 +168,30 @@ jobs:
           cd ~/rpmbuild
           rpmbuild -ba SPECS/tpcl-printer-app.spec
 
+      - name: Import GPG key and sign RPM
+        run: |
+          # Import GPG key
+          echo "${{ secrets.PACKAGE_SIGNING_KEY }}" | gpg --import --batch
+
+          # Configure RPM signing macros
+          cat > ~/.rpmmacros << EOF
+          %_signature gpg
+          %_gpg_path $HOME/.gnupg
+          %_gpg_name ${{ secrets.PACKAGE_SIGNING_KEY_ID }}
+          %_gpgbin /usr/bin/gpg
+          EOF
+
+          # Sign all RPM packages
+          find ~/rpmbuild/RPMS -name "*.rpm" -exec rpm --addsign {} \;
+
+          # Export public key
+          gpg --export --armor "${{ secrets.PACKAGE_SIGNING_KEY_ID }}" > ~/rpmbuild/RPM-GPG-KEY-tpcl-printer-app
+
       - name: Collect RPM artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/dist
           find ~/rpmbuild/RPMS -name "*.rpm" -exec cp {} $GITHUB_WORKSPACE/dist/ \;
+          cp ~/rpmbuild/RPM-GPG-KEY-tpcl-printer-app $GITHUB_WORKSPACE/dist/
           ls -lh $GITHUB_WORKSPACE/dist/
 
       - name: Upload RPM artifact (workflow)
@@ -263,6 +283,7 @@ jobs:
             dist/**/*.rpm
             dist/**/*.deb
             dist/**/*.pkg
+            dist/**/RPM-GPG-KEY-*
 
   publish-debian-repo:
     name: Publish Debian Repository

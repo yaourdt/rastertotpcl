@@ -373,7 +373,7 @@ sudo zypper install gcc gcc-c++ make pkg-config \
     cups-devel libppd libppd-devel cups-ddk \
     libjpeg8-devel libpng16-devel zlib-devel \
     libavahi-devel libopenssl-devel libusb-1_0-devel pam-devel \
-    ImageMagick
+    ImageMagick vim
 ```
 
 #### Linux (Debian/Ubuntu)
@@ -382,13 +382,13 @@ sudo zypper install gcc gcc-c++ make pkg-config \
 sudo apt-get install build-essential gcc make pkg-config \
     libcups2-dev libjpeg-dev libpng-dev zlib1g-dev \
     libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
-    imagemagick
+    imagemagick vim-common
 ```
 
 #### macOS
 
 ```bash
-brew install cups libjpeg libpng zlib openssl libusb imagemagick
+brew install cups libjpeg libpng zlib openssl libusb imagemagick vim
 ```
 
 ### 7.2 Build Commands
@@ -417,7 +417,7 @@ Running `make help` will show all available options and build flags.
 
 - **Translations**: Patched directly into PAPPL during the build process. See `/scripts` for details. This is why we statically link PAPPL and ship it with the binary.
 
-- **Icons**: ImageMagick is used to convert icon images to C header files during the build.
+- **Icons**: ImageMagick is used to resize icon images, and `xxd` (from vim-common package on Linux) is used to convert them to C header files during the build.
 
 - **Version Management**: The application version is automatically generated during build from git:
   - **On tagged commit**: Uses the tag (e.g., `v0.2.2` → `0.2.2`)

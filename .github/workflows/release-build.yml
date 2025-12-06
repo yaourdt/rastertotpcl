@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential gcc make pkg-config \
+            build-essential gcc make pkg-config vim-common \
             libcups2-dev libjpeg-dev libpng-dev zlib1g-dev \
             libavahi-client-dev libssl-dev libusb-1.0-0-dev libpam0g-dev \
             imagemagick
@@ -40,7 +40,7 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          brew install cups libjpeg libpng zlib openssl libusb imagemagick
+          brew install cups libjpeg libpng zlib openssl libusb imagemagick vim
 
       - name: Show tool versions
         run: |
@@ -48,6 +48,7 @@ jobs:
           gcc --version || clang --version || true
           pkg-config --version || true
           magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
+          xxd -v 2>&1 | head -n 1 || true
 
       - name: Build (full)
         run: |
@@ -103,7 +104,7 @@ jobs:
         run: |
           dnf install -y \
             git rpm-build rpmdevtools \
-            gcc make pkgconfig ImageMagick \
+            gcc make pkgconfig ImageMagick vim-common \
             cups-devel libjpeg-devel libpng-devel zlib-devel \
             openssl-devel libusbx-devel pam-devel avahi-devel \
             systemd-rpm-macros wget
@@ -117,6 +118,7 @@ jobs:
           gcc --version || true
           pkg-config --version || true
           magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
+          xxd -v 2>&1 | head -n 1 || true
           rpm --version || true
 
       - name: Setup RPM build tree
@@ -214,7 +216,7 @@ jobs:
           apt-get update
           apt-get install -y \
             git debhelper devscripts build-essential \
-            gcc make pkg-config imagemagick wget \
+            gcc make pkg-config imagemagick wget vim-common \
             libcups2-dev libjpeg-dev libpng-dev zlib1g-dev \
             libssl-dev libusb-1.0-0-dev libpam0g-dev libavahi-client-dev
 
@@ -227,6 +229,7 @@ jobs:
           gcc --version || true
           pkg-config --version || true
           magick --version 2>/dev/null | head -n 1 || convert --version 2>/dev/null | head -n 1 || true
+          xxd -v 2>&1 | head -n 1 || true
           dpkg --version || true
 
       - name: Determine version

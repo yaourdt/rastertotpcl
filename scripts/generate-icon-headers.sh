@@ -29,6 +29,12 @@ else
     exit 1
 fi
 
+# Check if xxd is available
+if ! command -v xxd &> /dev/null; then
+    echo "Error: xxd not found. Please install xxd (usually found in the vim-common package)."
+    exit 1
+fi
+
 echo "Generating icon header files..."
 
 # Create temporary directory for resized icons

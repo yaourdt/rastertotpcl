@@ -5,13 +5,13 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: TPCL Printer Application Debian Repository
-Date: Sun, 30 Nov 2025 20:19:58 +0000
+Date: Sat, 06 Dec 2025 20:54:43 +0000
 MD5Sum:
- 9586e07d8685d007c60331e4f87d4def             1081 main/binary-amd64/Packages
- 70d56ae1ed15818c5bb63f34725bc0eb              670 main/binary-amd64/Packages.gz
+ a2fa18ce7101fd4248e668f09e1b396a             1082 main/binary-amd64/Packages
+ 69a77a2933816d8ede56aa9499d5b399              675 main/binary-amd64/Packages.gz
 SHA1:
- b4bef3233600e037931788a0c38b7de7d0edd81f             1081 main/binary-amd64/Packages
- b451a6e598c1b2bc12fb97a3bddfe12384d7386f              670 main/binary-amd64/Packages.gz
+ fb2210e225ab6b8c2b70e0dd520179aca477ecbe             1082 main/binary-amd64/Packages
+ e6d097719541ad3f412f4b469a30c17bee37e133              675 main/binary-amd64/Packages.gz
 SHA256:
- 71e5fdd224ea3ebadd365096b54a21731e343e32e36c8354aa9396f3b5c7fa59             1081 main/binary-amd64/Packages
- 16e0d47bf38beb9c8cade92403a901395ae5b25636ddba6d8187d3085f8cec84              670 main/binary-amd64/Packages.gz
+ 21dea6a020a29419b2f0b38df89f6dc8228c654f956672109d7c56a3698d963a             1082 main/binary-amd64/Packages
+ b836ab4dcfc0844934687be2e1b4ec22a83dd5ca8c1f6a031e5637be4a187a7e              675 main/binary-amd64/Packages.gz

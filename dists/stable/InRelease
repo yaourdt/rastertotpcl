@@ -8,29 +8,29 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: TPCL Printer Application Debian Repository
-Date: Sun, 30 Nov 2025 20:19:58 +0000
+Date: Sat, 06 Dec 2025 20:54:43 +0000
 MD5Sum:
- 9586e07d8685d007c60331e4f87d4def             1081 main/binary-amd64/Packages
- 70d56ae1ed15818c5bb63f34725bc0eb              670 main/binary-amd64/Packages.gz
+ a2fa18ce7101fd4248e668f09e1b396a             1082 main/binary-amd64/Packages
+ 69a77a2933816d8ede56aa9499d5b399              675 main/binary-amd64/Packages.gz
 SHA1:
- b4bef3233600e037931788a0c38b7de7d0edd81f             1081 main/binary-amd64/Packages
- b451a6e598c1b2bc12fb97a3bddfe12384d7386f              670 main/binary-amd64/Packages.gz
+ fb2210e225ab6b8c2b70e0dd520179aca477ecbe             1082 main/binary-amd64/Packages
+ e6d097719541ad3f412f4b469a30c17bee37e133              675 main/binary-amd64/Packages.gz
 SHA256:
- 71e5fdd224ea3ebadd365096b54a21731e343e32e36c8354aa9396f3b5c7fa59             1081 main/binary-amd64/Packages
- 16e0d47bf38beb9c8cade92403a901395ae5b25636ddba6d8187d3085f8cec84              670 main/binary-amd64/Packages.gz
+ 21dea6a020a29419b2f0b38df89f6dc8228c654f956672109d7c56a3698d963a             1082 main/binary-amd64/Packages
+ b836ab4dcfc0844934687be2e1b4ec22a83dd5ca8c1f6a031e5637be4a187a7e              675 main/binary-amd64/Packages.gz
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmkspu4ACgkQEEgP7huA
-sVO8fg/+JKXU8xP5VqoFPLMscDkYbkSDO/mHHxD0VOGjTHKGAnnpC6IJMFN/vtWF
-MqyKDATlvgzCy5MNLwRxLQBWDLCeMA2aEyXXbYl2pwr5ae28poGwtCNjkaX415aE
-UQcyycJRcsi2iSleYSbLAIXVifuq4ckYUDtctRDT6HRdmKNwe0wNTP0dBVt1DWCd
-HuYuG+n+/6lH14InZ6wKzB5FuJd9URKz8+PupEfrrQU5Cr6U9NTrwdS29H9sK13h
-D0blu7GJyitA71seBapa0ntg1/E5XP36c2dHNK/8wSDnE0n/G6ZZtFh7YogWLl31
-b4qdOYtgGPCRejoYGXzimlWQHTZUdt4zxXa6F4ZlX5nC3RO2efqMnqDBc2Z0Kayn
-JmElhmWexLdO77dwgM/RxMF0UOx52Xsl7rmtnxDJV0po7qLE3K4s8Ji9dIlBRT7F
-gWQy3XDFDDgsWLNmSYUX+Diy8sOPvDD2BMKOAB2pM6pnYIUTkhUl59Hy2LDPj6Ep
-Ru7v6SYjpjb3kzj5YhXM/s+JEZ7dD2Gvn2bK8HMZbA/YgcPl3MSM5VcEwk3sCKEO
-7nT0WSlWwaRV59CZ2LH2nDxZgWlRUYiwR6XBYXjNl5ZwA3fUbPJ1rO3SBGg4zrCk
-5h/DEKawMAI74WfACdzDw9i0GVIYN4P80W1HxiXX2JlSzYX1Tqs=
-=q+hR
+iQIzBAEBCgAdFiEEgjr9NF9jeaUEjACLEEgP7huAsVMFAmk0mBMACgkQEEgP7huA
+sVNzEA//ePjEaZD+hpyfuC+sNp3XMNHtJ4atkTA5+Qpcxa60n5xqKqKdqTp/CoI2
+kATdarq3YpHtGKdpjoO9cx2Ljr+BX6zpcGsIR3d3JFwAAnXdjaiWJAAjwt3+s9tn
+0bp29lKOfdBooRWLA+SGU223jdqXI7L6TpxlvgXjeawU9fcH3IoLbKuWrjwYf9EE
+0RyILLLsqNIDUnnlYV8MAL1VEQNi09Eun5Cx4V1R3HI7chLmsVZlRlutdTRE+W7M
+OyPpd5gb1Eh5slUONPsSlp3PWsSSnNrkd9Uy6RoaYQqD/1uQXUw5roq2VzkRExsU
+LjSINjF1sN6zTeyePz0ayhzhtHW9fPZziSilRTITFUZZQ+Jk9RBx1ZbjAyZRf8M0
+jfr/ib2ASv/Fiz2YJrtLIkbklQAwqxmhPKWJTj5XJwt76QFK0jIvf9lESSXIZW9X
+qnGWvzXMNPgYtsBbcO3se+IVOGNyeO2DGhUmARACTLj5oKhfoDbNBREcHTdYmwy1
+22qksb9j/fzABvCuBQ32O0IKwyQ2RpfRUAlqJrJOr3UDkcHPO+psr6PjKMWMqBbZ
+dOA1Ybmij9YQ0HkvYO7BnzBLGOOXi/CfCzEQscFsVk4hQaukP0Ho4qqXCo/+sEzA
+pLLN2xqFDp5vEKGb95X0R6Q9iAFjOBZ8O44Ye7dIwEUECPg0WKY=
+=MG1n
 -----END PGP SIGNATURE-----
